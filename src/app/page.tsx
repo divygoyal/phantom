@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -17,32 +17,73 @@ import {
   Check,
   Link as LinkIcon,
   Newspaper,
+  Download,
+  AlertTriangle,
 } from "lucide-react";
 
+type StreamEvent = {
+  id: string;
+  step: string;
+  tool: string;
+  label: string;
+  detail?: string;
+  output?: string;
+  status: "running" | "done" | "failed";
+  data?: { videoUrl?: string; slug?: string };
+};
+
 const STAGES = [
-  { label: "Fetching source content", detail: "Scraping x.com" },
-  { label: "Extracting key claims", detail: "GPT-4o · 4 chunks" },
-  { label: "Drafting viral hook", detail: "12 variants scored" },
-  { label: "Writing scene script", detail: "4 scenes · 58s cut" },
-  { label: "Synthesizing voiceover", detail: "ElevenLabs · Brian" },
-  { label: "Generating B-roll", detail: "FLUX 1.1 · 8 shots" },
-  { label: "Matching trending audio", detail: "342 tracks ranked" },
-  { label: "Burning captions", detail: "Word-level sync" },
-  { label: "Rendering 9:16 frames", detail: "1800 frames · GPU" },
-  { label: "Encoding 1080p H.264", detail: "ffmpeg · veryfast" },
-  { label: "Mastering audio", detail: "−14 LUFS" },
-  { label: "Finalizing reel", detail: "Packaging MP4" },
+  { label: "Delegating to reel-production agent", detail: "Phantom · claude --print subprocess" },
+  { label: "Source ingest & editorial intake", detail: "X syndication · cheerio · 12-field brief" },
+  { label: "Script draft + critique pass", detail: "9-beat reel · 20 auto-fail signals" },
+  { label: "Avatar render (HeyGen template)", detail: "Elio look · chroma-locked BG" },
+  { label: "B-roll generation", detail: "Gemini Nano Banana · per beat" },
+  { label: "Composition + 9:16 render", detail: "Whisper-pinned · ffmpeg · 30fps" },
+  { label: "Word-level Playfair captions", detail: "1.3× speed · sentence case" },
+  { label: "Final reel ready to ship", detail: "Mobile-encoded mp4" },
 ] as const;
 
 const SUGGESTIONS = [
-  { label: "Try: ChatGPT viral prompt", value: "https://x.com/altryne/status/1843921478239827841" },
-  { label: "AI breakthrough X post", value: "https://x.com/openai/status/1839921478239827841" },
-  { label: "Startup funding news", value: "https://techcrunch.com/2026/05/15/ai-startup-mega-round/" },
+  { label: "Test X post (Anthropic)", value: "https://x.com/AnthropicAI/status/1845869029537984584" },
+  { label: "Test article (Verge)", value: "https://www.theverge.com/2024/10/22/24277610/anthropic-claude-3-5-sonnet-computer-use" },
 ] as const;
 
-const TOTAL_FRAMES = 1800;
-const FAKE_DURATION_SEC = 298;
-const REAL_DURATION_MS = 10000;
+// Visual constants — the frame-counter dither animation is purely cosmetic, so
+// we still drive a fake "frame" counter against an estimated ~25-min skill run
+// so the UI stays alive between sparse SSE heartbeats. Real progress comes
+// from the stageIdx state below, mapped from actual pipeline events.
+const FRAME_TARGET = 1800;
+const EST_DURATION_SEC = 25 * 60;
+
+// Map a real SSE event from /api/agent/run-from-url into the 8-stage UI list.
+// Falls back to a time-based estimate during long-running heartbeats so the
+// stage indicator advances even when the skill is mid-composition.
+function mapEventToStage(
+  ev: StreamEvent,
+  artifactN: number,
+  elapsedMin: number
+): number {
+  if (ev.step === "skill-mode") return 0;
+  if (ev.step === "skill-invoke") return Math.max(1, ev.status === "done" ? 6 : 1);
+  if (ev.step === "ingest") return 1;
+  if (ev.step.startsWith("artifact-")) {
+    if (artifactN <= 1) return 1;       // editorial-brief
+    if (artifactN <= 3) return 2;       // script + plan
+    if (artifactN <= 6) return 3;       // avatar render artifacts
+    if (artifactN <= 11) return 4;      // gemini stills
+    return 5;                           // composition stage
+  }
+  if (ev.step === "skill-heartbeat") {
+    if (elapsedMin < 1) return 1;
+    if (elapsedMin < 4) return 2;
+    if (elapsedMin < 9) return 3;
+    if (elapsedMin < 14) return 4;
+    return 5;
+  }
+  if (ev.step === "style-apply") return ev.status === "done" ? 7 : 6;
+  if (ev.step === "skill-collect") return ev.status === "done" ? 7 : 6;
+  return 0;
+}
 
 function formatEta(sec: number) {
   const s = Math.max(0, Math.round(sec));
@@ -277,36 +318,116 @@ function LogoStrip() {
 
 function Generator() {
   const [input, setInput] = useState("");
-  const [phase, setPhase] = useState<"idle" | "rendering" | "done">("idle");
-  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<"idle" | "rendering" | "done" | "failed">("idle");
   const [stageIdx, setStageIdx] = useState(0);
-  const [etaSec, setEtaSec] = useState(FAKE_DURATION_SEC);
-  const [frame, setFrame] = useState(0);
-  const [fps, setFps] = useState(142);
-  const [vramGb, setVramGb] = useState(2.1);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [eventCount, setEventCount] = useState(0);
+  const [artifactCount, setArtifactCount] = useState(0);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeLabel, setActiveLabel] = useState<string>("");
 
-  const start = () => {
+  const startTimeRef = useRef<number | null>(null);
+
+  // Tick a 1s elapsed counter while rendering — drives the cosmetic frame
+  // counter + the ETA display so the UI feels alive between SSE heartbeats.
+  useEffect(() => {
+    if (phase !== "rendering") return;
+    const id = setInterval(() => {
+      if (startTimeRef.current) {
+        setElapsedSec(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  // Real-event progress. The progress bar weights stageIdx as fraction of
+  // STAGES, with a half-step lift while a stage is mid-flight, so visual
+  // motion happens between events too.
+  const stageFrac = Math.min(1, (stageIdx + (phase === "done" ? 1 : 0.5)) / STAGES.length);
+  const progress = stageFrac * 100;
+  const etaSec = Math.max(0, EST_DURATION_SEC - elapsedSec);
+  const frame = Math.min(FRAME_TARGET, Math.round((elapsedSec / EST_DURATION_SEC) * FRAME_TARGET));
+
+  const start = async () => {
     if (!input.trim()) return;
     setPhase("rendering");
-    setProgress(0);
     setStageIdx(0);
-    setEtaSec(FAKE_DURATION_SEC);
-    setFrame(0);
+    setElapsedSec(0);
+    setEventCount(0);
+    setArtifactCount(0);
+    setVideoUrl(null);
+    setErrorMsg(null);
+    setActiveLabel("Starting…");
+    startTimeRef.current = Date.now();
 
-    const startedAt = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / REAL_DURATION_MS);
-      const eased = 1 - Math.pow(1 - t, 1.5);
-      setProgress(eased * 100);
-      setEtaSec(FAKE_DURATION_SEC * (1 - eased));
-      setFrame(Math.round(TOTAL_FRAMES * eased));
-      setStageIdx(Math.min(STAGES.length - 1, Math.floor(t * STAGES.length)));
-      setFps(110 + Math.round(Math.random() * 60));
-      setVramGb(2 + Math.round((eased * 5 + Math.random() * 0.5) * 10) / 10);
-      if (t < 1) requestAnimationFrame(tick);
-      else setPhase("done");
-    };
-    requestAnimationFrame(tick);
+    let artifacts = 0;
+    let captured: string | null = null;
+
+    try {
+      const res = await fetch("/api/agent/run-from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: input.trim() }),
+      });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() || "";
+
+        for (const block of blocks) {
+          if (block.startsWith("event: done")) continue;
+          const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+          if (!dataLine) continue;
+          const payload = dataLine.slice(6).trim();
+          if (!payload || payload === "{}") continue;
+          try {
+            const ev: StreamEvent = JSON.parse(payload);
+            setEventCount((c) => c + 1);
+            if (ev.step.startsWith("artifact-")) {
+              artifacts += 1;
+              setArtifactCount(artifacts);
+            }
+            const elapsedMin = startTimeRef.current
+              ? (Date.now() - startTimeRef.current) / 60_000
+              : 0;
+            const newIdx = mapEventToStage(ev, artifacts, elapsedMin);
+            setStageIdx((cur) => Math.max(cur, newIdx));
+            setActiveLabel(ev.label || ev.step);
+            if (ev.data?.videoUrl) {
+              captured = ev.data.videoUrl;
+              setVideoUrl(ev.data.videoUrl);
+            }
+            // style-apply failure is non-fatal — the skill still returns the
+            // unstyled base reel. Only surface a hard failure for other steps.
+            if (ev.status === "failed" && ev.step !== "style-apply") {
+              setErrorMsg(ev.output || ev.label);
+            }
+          } catch {
+            /* skip malformed SSE chunk */
+          }
+        }
+      }
+
+      if (captured) {
+        setStageIdx(STAGES.length - 1);
+        setPhase("done");
+      } else {
+        setPhase("failed");
+      }
+    } catch (err) {
+      console.error(err);
+      setPhase("failed");
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    }
   };
 
   return (
@@ -372,6 +493,33 @@ function Generator() {
           </div>
         </Card>
 
+        {phase === "failed" && (
+          <Card className="mt-6 p-6 rounded-3xl border-destructive/30 bg-destructive/[0.06] animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="size-5 text-destructive shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-destructive">Reel pipeline failed</p>
+                {errorMsg && (
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl border border-destructive/20 bg-background/60 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                    {errorMsg}
+                  </pre>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Reached {stageIdx + 1} of {STAGES.length} stages · {eventCount} events · {formatEta(elapsedSec)} elapsed
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 rounded-full"
+                  onClick={() => setPhase("idle")}
+                >
+                  Try again
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {(phase === "rendering" || phase === "done") && (
           <Card className="relative mt-6 p-6 md:p-8 rounded-3xl border-border/60 shadow-[var(--shadow-card)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div
@@ -389,7 +537,7 @@ function Generator() {
                   <div>
                     <p className="text-sm font-semibold">Reel ready to ship</p>
                     <p className="text-xs text-muted-foreground">
-                      Rendered in <span className="font-mono">4:58</span> · 1080×1920 · 6.2 MB
+                      Rendered in <span className="font-mono">{formatEta(elapsedSec)}</span> · 1080×1920 · {STAGES.length} stages
                     </p>
                   </div>
                 </div>
@@ -436,14 +584,19 @@ function Generator() {
                         }}
                       />
 
-                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white pointer-events-none">
-                        <p className="text-[10px] uppercase tracking-[0.3em] opacity-80 font-mono">Frame</p>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white pointer-events-none px-4 text-center">
+                        <p className="text-[10px] uppercase tracking-[0.3em] opacity-80 font-mono">Elapsed</p>
                         <p className="text-5xl md:text-6xl font-bold font-mono tabular-nums tracking-tight drop-shadow">
-                          {String(frame).padStart(4, "0")}
+                          {formatEta(elapsedSec)}
                         </p>
                         <p className="text-[10px] uppercase tracking-[0.2em] opacity-70 font-mono mt-1">
-                          of {TOTAL_FRAMES}
+                          Step {Math.min(stageIdx + 1, STAGES.length)} of {STAGES.length}
                         </p>
+                        {activeLabel && (
+                          <p className="text-[11px] opacity-85 mt-3 font-medium leading-tight max-w-[200px] line-clamp-2">
+                            {activeLabel}
+                          </p>
+                        )}
                       </div>
 
                       <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
@@ -463,8 +616,8 @@ function Generator() {
                   ) : (
                     <>
                       <video
-                        key="rendered-result"
-                        src="/videos/demo-chatgpt-viral.mp4"
+                        key={videoUrl ?? "rendered-result"}
+                        src={videoUrl ?? "/demo-reel.mp4"}
                         autoPlay
                         muted
                         loop
@@ -498,10 +651,10 @@ function Generator() {
                     <div className="flex items-end justify-between gap-4">
                       <div>
                         <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                          Estimated time left
+                          Elapsed · est ~25 min
                         </p>
                         <p className="text-5xl md:text-6xl font-semibold tracking-tighter font-mono tabular-nums leading-none mt-2">
-                          {formatEta(etaSec)}
+                          {formatEta(elapsedSec)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -536,9 +689,9 @@ function Generator() {
                     </div>
 
                     <div className="mt-5 grid grid-cols-3 gap-2">
-                      <StatPill label="GPU" value="A100" />
-                      <StatPill label="Throughput" value={`${fps} fps`} />
-                      <StatPill label="VRAM" value={`${vramGb.toFixed(1)} GB`} />
+                      <StatPill label="Engine" value="HeyGen + Skill" />
+                      <StatPill label="Events" value={String(eventCount)} />
+                      <StatPill label="Artifacts" value={String(artifactCount)} />
                     </div>
 
                     <div className="mt-6 space-y-1.5">
@@ -580,39 +733,39 @@ function Generator() {
                     </div>
                   </>
                 ) : (
-                  <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-700">
+                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-700">
                     <div>
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hook (0–3s)</p>
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Channel</p>
                       <p className="text-xl md:text-2xl font-semibold leading-tight">
-                        &ldquo;This ChatGPT prompt is going viral — and it changes everything.&rdquo;
+                        @aisimplified
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Word-pinned Playfair captions · 1.3× speed · 1080×1920
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Caption</p>
-                      <p className="text-sm">
-                        Save this before OpenAI patches it 👇 Three lines that turn ChatGPT into your personal research analyst.
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hashtags</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {["#shorts", "#chatgpt", "#aiprompts", "#productivity", "#viral"].map((h) => (
-                          <span key={h} className="text-xs px-2 py-1 rounded-full bg-secondary">{h}</span>
-                        ))}
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Render summary</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <StatPill label="Total time" value={formatEta(elapsedSec)} />
+                        <StatPill label="Pipeline events" value={String(eventCount)} />
+                        <StatPill label="Artifacts" value={String(artifactCount)} />
+                        <StatPill label="Stages" value={`${STAGES.length}/${STAGES.length}`} />
                       </div>
                     </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Music cue</p>
-                      <p className="text-sm text-muted-foreground">
-                        Tense lo-fi build → drop at 0:14 · &ldquo;Aesthetic&rdquo; — Tollan Kim
-                      </p>
-                    </div>
                     <div className="flex flex-wrap gap-2 pt-2">
-                      <Button className="rounded-full bg-hero text-white border-0 hover:opacity-90">
-                        <Share2 className="size-4" /> Post to @aisimplified
-                      </Button>
-                      <Button variant="outline" className="rounded-full border-border bg-background/60">
-                        Download MP4
+                      {videoUrl && (
+                        <Button asChild className="rounded-full bg-hero text-white border-0 hover:opacity-90">
+                          <a href={videoUrl} download={`reel-${Date.now()}.mp4`}>
+                            <Download className="size-4" /> Download MP4
+                          </a>
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        className="rounded-full border-border bg-background/60"
+                        onClick={() => setPhase("idle")}
+                      >
+                        <Wand2 className="size-4" /> Generate another
                       </Button>
                     </div>
                   </div>
@@ -624,10 +777,10 @@ function Generator() {
             <div className="mt-7 pt-6 border-t border-border/60">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Timeline · {TOTAL_FRAMES} frames
+                  Pipeline · {STAGES.length} stages
                 </p>
                 <p className="text-xs font-mono text-muted-foreground tabular-nums">
-                  {phase === "done" ? TOTAL_FRAMES : frame} / {TOTAL_FRAMES}
+                  {phase === "done" ? STAGES.length : Math.min(stageIdx + 1, STAGES.length)} / {STAGES.length}
                 </p>
               </div>
               <div
