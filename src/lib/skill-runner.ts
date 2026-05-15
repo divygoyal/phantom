@@ -53,51 +53,104 @@ export async function* runReelViaSkill(
 
   yield {
     step: "skill-invoke",
-    message: "Invoking reel-production skill via claude --print",
+    message: "Invoking reel-production skill (this typically takes 15-30 min)",
     status: "running",
-    output: `cwd: ${WORKSPACE_ROOT}\nslug: ${skillSlug}\nprompt length: ${prompt.length} chars`,
+    output: `cwd: ${WORKSPACE_ROOT}\nslug: ${skillSlug}\nphases: 0 → 0.5 → 1 → 2 → 3 → 4 → 5\nthe skill: ingests URL, dense-scans source video, picks tone/hook/structure, writes script, renders HeyGen avatar via API, cuts source clips at natural durations, runs Phase 3 critique, renders the composition (1100+ frames @ 30fps × 8 workers), mobile-safe encode\nliveness: tail the workspace's output/breaking/${skillSlug}/ for new artifacts as phases complete`,
   };
 
-  // Tail the output dir for new files → progress signal
+  // Heartbeat queue: collect events from the file watcher and the periodic
+  // pulse so we can yield them from the generator without races.
+  const eventQueue: SkillEvent[] = [];
+  const wake: { fn: (() => void) | null } = { fn: null };
+  const pushEvent = (e: SkillEvent) => {
+    eventQueue.push(e);
+    wake.fn?.();
+  };
+
+  // Per-30s heartbeat so the UI doesn't look frozen during the long subprocess
+  const heartbeatStart = Date.now();
+  // Use a single step ID so the heartbeat row updates in place (no list growth)
+  const heartbeat = setInterval(() => {
+    const elapsedMin = ((Date.now() - heartbeatStart) / 60_000).toFixed(1);
+    pushEvent({
+      step: "skill-heartbeat",
+      message: `Skill running · ${elapsedMin} min elapsed`,
+      status: "running",
+      output: `subprocess alive. typical full run: 15-30 min for Phase 0 → 5 including composition + final render.`,
+    });
+  }, 30_000);
+
+  // Watch the output dir for new artifacts → progress signal
   let lastFileCount = 0;
   const watcher = setInterval(async () => {
     try {
       const files = await fs.readdir(skillOutputDir);
       if (files.length > lastFileCount) {
+        const newFile = files[files.length - 1];
         lastFileCount = files.length;
-        // Note: we can't yield from outside the generator; tracking only.
+        pushEvent({
+          step: `artifact-${files.length}`,
+          message: `New artifact written: ${newFile}`,
+          status: "running",
+          output: `total artifacts in slug dir: ${files.length}`,
+        });
       }
     } catch {
       /* ignore */
     }
-  }, 5000);
+  }, 5_000);
 
-  // Run claude --print as a subprocess
-  const result = await new Promise<{ ok: boolean; stdout: string; stderr: string }>((resolve) => {
-    const proc = spawn("claude", ["--print"], {
-      shell: true,
-      cwd: WORKSPACE_ROOT,
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true,
-      env: process.env,
-    });
-
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d) => (stdout += d.toString()));
-    proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("close", (code) => {
-      clearInterval(watcher);
-      resolve({ ok: code === 0, stdout, stderr });
-    });
-    proc.on("error", () => {
-      clearInterval(watcher);
-      resolve({ ok: false, stdout, stderr });
-    });
-
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+  // Start the subprocess. We resolve when the process closes.
+  let resolveProc: ((v: { ok: boolean; stdout: string; stderr: string }) => void) | null = null;
+  const procResult = new Promise<{ ok: boolean; stdout: string; stderr: string }>((r) => {
+    resolveProc = r;
   });
+
+  let stdout = "";
+  let stderr = "";
+  const proc = spawn("claude", ["--print"], {
+    shell: true,
+    cwd: WORKSPACE_ROOT,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+    env: process.env,
+  });
+  proc.stdout.on("data", (d) => (stdout += d.toString()));
+  proc.stderr.on("data", (d) => (stderr += d.toString()));
+  proc.on("close", (code) => {
+    clearInterval(heartbeat);
+    clearInterval(watcher);
+    resolveProc?.({ ok: code === 0, stdout, stderr });
+  });
+  proc.on("error", () => {
+    clearInterval(heartbeat);
+    clearInterval(watcher);
+    resolveProc?.({ ok: false, stdout, stderr });
+  });
+  proc.stdin.write(prompt);
+  proc.stdin.end();
+
+  // Drain the event queue + wait for proc to finish.
+  let procDone = false;
+  let result!: { ok: boolean; stdout: string; stderr: string };
+  procResult.then((r) => {
+    result = r;
+    procDone = true;
+    wake.fn?.();
+  });
+  while (!procDone || eventQueue.length > 0) {
+    if (eventQueue.length === 0) {
+      await new Promise<void>((r) => {
+        wake.fn = () => {
+          wake.fn = null;
+          r();
+        };
+      });
+      continue;
+    }
+    const next = eventQueue.shift()!;
+    yield next;
+  }
 
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 

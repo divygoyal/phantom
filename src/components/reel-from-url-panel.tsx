@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Play, Loader2, CheckCircle2, AlertTriangle, Link as LinkIcon } from "lucide-react";
+import { Play, Loader2, CheckCircle2, AlertTriangle, Link as LinkIcon, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -182,9 +182,25 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
       {/* Final reel embed */}
       {displayVideo && (
         <Card className="rounded-3xl border-foreground/30 shadow-[var(--shadow-glow)] p-6">
-          <div className="flex items-center gap-2 text-sm font-semibold text-brand mb-4">
-            <CheckCircle2 className="size-4" />
-            Reel rendered
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-brand">
+              <CheckCircle2 className="size-4" />
+              Reel rendered
+            </div>
+            <Button
+              asChild
+              size="sm"
+              className="rounded-full bg-foreground text-background hover:bg-foreground/90"
+            >
+              <a
+                href={displayVideo}
+                download={`reel-${Date.now()}.mp4`}
+                aria-label="Download reel mp4"
+              >
+                <Download className="size-3.5" />
+                Download mp4
+              </a>
+            </Button>
           </div>
           <div className="flex justify-center">
             <video
@@ -198,8 +214,7 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
           </div>
           {!videoUrl && defaultDemoVideo && (
             <div className="mt-3 text-xs text-muted-foreground text-center">
-              Live render takes 5-10 minutes; showing this morning&apos;s pre-rendered
-              artifact from the same pipeline.
+              Showing the pre-baked demo reel. Run a URL above to render fresh.
             </div>
           )}
         </Card>
