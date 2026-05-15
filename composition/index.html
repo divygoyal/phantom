@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #000;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      }
+      #root { position: relative; width: 1080px; height: 1920px; background: #000; }
+
+      /* === ASSET ZONE (top 60%) === */
+      .asset-zone {
+        position: absolute;
+        left: 0; top: 0;
+        width: 1080px; height: 1152px;
+        overflow: hidden;
+        background: #0a0a0a;
+      }
+      .broll {
+        position: absolute;
+        inset: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        opacity: 0;
+      }
+      .caption-band {
+        position: absolute;
+        left: 60px; right: 60px;
+        bottom: 80px;
+        font-size: 78px;
+        line-height: 1.06;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #ffffff;
+        text-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.9);
+        background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+        padding: 24px 28px;
+        border-radius: 12px;
+        opacity: 0;
+      }
+
+      /* === AVATAR ZONE (bottom 40%) === */
+      .avatar-zone {
+        position: absolute;
+        left: 0; top: 1152px;
+        width: 1080px; height: 768px;
+        overflow: hidden;
+        background: #000;
+      }
+      .avatar-video {
+        position: absolute;
+        inset: 0;
+        width: 100%; height: 100%;
+        object-fit: cover;
+        object-position: center bottom;
+      }
+      /* subtle fade where asset meets avatar */
+      .seam-fade {
+        position: absolute;
+        left: 0; right: 0; top: -40px;
+        height: 80px;
+        background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.6));
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      /* === HOOK OVERLAY (B1 only) === */
+      .hook-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.85) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 80px 60px;
+        opacity: 0;
+        z-index: 20;
+      }
+      .hook-text {
+        font-size: 120px;
+        line-height: 1.02;
+        font-weight: 900;
+        letter-spacing: -0.025em;
+        color: #ffffff;
+        text-align: center;
+        text-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      }
+      .hook-accent {
+        color: #22d3ee;
+      }
+
+      /* === OUTRO CARD === */
+      .outro {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 280px;
+        background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.6) 70%, transparent);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        opacity: 0;
+        z-index: 25;
+      }
+      .outro-handle {
+        font-size: 64px;
+        font-weight: 800;
+        color: #22d3ee;
+        letter-spacing: -0.01em;
+      }
+      .outro-cta {
+        font-size: 32px;
+        color: #ffffff;
+        font-weight: 600;
+        opacity: 0.85;
+      }
+
+      /* === BEAT-INDEX BADGE (small, top-left) === */
+      .beat-badge {
+        position: absolute;
+        top: 36px; left: 36px;
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(6px);
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 22px;
+        color: #ffffff;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        z-index: 15;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="34.58"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- ASSET ZONE -->
+      <div class="asset-zone">
+        <img id="broll-1" class="broll clip" data-start="0.00" data-duration="3.00" data-track-index="0" src="https://picsum.photos/seed/872050268/1080/1280" alt="b-roll 1" />
+        <img id="broll-2" class="broll clip" data-start="3.00" data-duration="4.19" data-track-index="0" src="https://picsum.photos/seed/1028108208/1080/1280" alt="b-roll 2" />
+        <img id="broll-3" class="broll clip" data-start="7.19" data-duration="3.00" data-track-index="0" src="https://picsum.photos/seed/1784002062/1080/1280" alt="b-roll 3" />
+        <img id="broll-4" class="broll clip" data-start="10.19" data-duration="10.23" data-track-index="0" src="https://picsum.photos/seed/474941125/1080/1280" alt="b-roll 4" />
+        <img id="broll-5" class="broll clip" data-start="20.42" data-duration="3.00" data-track-index="0" src="https://picsum.photos/seed/1784002062/1080/1280" alt="b-roll 5" />
+        <img id="broll-6" class="broll clip" data-start="23.42" data-duration="11.16" data-track-index="0" src="https://picsum.photos/seed/491534943/1080/1280" alt="b-roll 6" />
+
+        <div id="caption-1" class="caption-band clip" data-start="0.00" data-duration="3.00" data-track-index="1"></div>
+        <div id="caption-2" class="caption-band clip" data-start="3.00" data-duration="4.19" data-track-index="1">If you're typing "write me a..." you're already</div>
+        <div id="caption-3" class="caption-band clip" data-start="7.19" data-duration="3.00" data-track-index="1"></div>
+        <div id="caption-4" class="caption-band clip" data-start="10.19" data-duration="10.23" data-track-index="1">Most people treat ChatGPT like a search engine</div>
+        <div id="caption-5" class="caption-band clip" data-start="20.42" data-duration="3.00" data-track-index="1"></div>
+        <div id="caption-6" class="caption-band clip" data-start="23.42" data-duration="11.16" data-track-index="1">ChatGPT is a roleplay engine. You're not asking</div>
+
+        <div id="badge-1" class="beat-badge clip" data-start="0.00" data-duration="3.00" data-track-index="2">1 · 6</div>
+        <div id="badge-2" class="beat-badge clip" data-start="3.00" data-duration="4.19" data-track-index="2">2 · 6</div>
+        <div id="badge-3" class="beat-badge clip" data-start="7.19" data-duration="3.00" data-track-index="2">3 · 6</div>
+        <div id="badge-4" class="beat-badge clip" data-start="10.19" data-duration="10.23" data-track-index="2">4 · 6</div>
+        <div id="badge-5" class="beat-badge clip" data-start="20.42" data-duration="3.00" data-track-index="2">5 · 6</div>
+        <div id="badge-6" class="beat-badge clip" data-start="23.42" data-duration="11.16" data-track-index="2">6 · 6</div>
+      </div>
+
+      <!-- AVATAR ZONE -->
+      <div class="avatar-zone">
+        <div class="seam-fade"></div>
+        <video
+          id="avatar"
+          class="avatar-video clip"
+          muted
+          data-start="0"
+          data-duration="34.58"
+          data-track-index="3"
+          src="assets/avatar-article-claude-language-model-wikipedia-1778856223750.mp4"
+        ></video>
+      </div>
+
+      <!-- Avatar audio (separate per HyperFrames rule) -->
+      <audio
+        id="avatar-audio"
+        class="clip"
+        data-start="0"
+        data-duration="34.58"
+        data-track-index="4"
+        src="assets/avatar-article-claude-language-model-wikipedia-1778856223750.mp4"
+      ></audio>
+
+      <!-- HOOK OVERLAY -->
+      <div
+        id="hook"
+        class="hook-overlay clip"
+        data-start="0"
+        data-duration="3.00"
+        data-track-index="6"
+      >
+        <div class="hook-text"></div>
+      </div>
+
+      <!-- OUTRO -->
+      <div
+        id="outro"
+        class="outro clip"
+        data-start="33.58"
+        data-duration="1.00"
+        data-track-index="7"
+      >
+        <div class="outro-handle">@aisimplified</div>
+        <div class="outro-cta">subscribe for more</div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+
+      // Per-beat: B-roll fades in over 0.3s, caption slides up + fades in over 0.4s after a 0.2s delay
+      
+      tl.to("#broll-1", { opacity: 1, duration: 0.3 }, 0.00);
+      tl.fromTo("#caption-1", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.20);
+      tl.to("#badge-1", { opacity: 1, duration: 0.3 }, 0.00);
+      tl.to("#broll-2", { opacity: 1, duration: 0.3 }, 3.00);
+      tl.fromTo("#caption-2", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 3.20);
+      tl.to("#badge-2", { opacity: 1, duration: 0.3 }, 3.00);
+      tl.to("#broll-3", { opacity: 1, duration: 0.3 }, 7.19);
+      tl.fromTo("#caption-3", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 7.39);
+      tl.to("#badge-3", { opacity: 1, duration: 0.3 }, 7.19);
+      tl.to("#broll-4", { opacity: 1, duration: 0.3 }, 10.19);
+      tl.fromTo("#caption-4", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 10.39);
+      tl.to("#badge-4", { opacity: 1, duration: 0.3 }, 10.19);
+      tl.to("#broll-5", { opacity: 1, duration: 0.3 }, 20.42);
+      tl.fromTo("#caption-5", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 20.62);
+      tl.to("#badge-5", { opacity: 1, duration: 0.3 }, 20.42);
+      tl.to("#broll-6", { opacity: 1, duration: 0.3 }, 23.42);
+      tl.fromTo("#caption-6", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 23.62);
+      tl.to("#badge-6", { opacity: 1, duration: 0.3 }, 23.42);
+
+      // Hook overlay: fade in instantly at 0, fade out at 3.00s
+      tl.to("#hook", { opacity: 1, duration: 0.2 }, 0);
+      tl.to("#hook", { opacity: 0, duration: 0.5 }, 2.50);
+
+      // Outro: fade in at outroStart
+      tl.to("#outro", { opacity: 1, duration: 0.4 }, 33.58);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

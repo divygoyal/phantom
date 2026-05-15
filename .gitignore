@@ -39,6 +39,11 @@ prisma/*.db
 prisma/*.db-journal
 prisma/prisma/
 
+# Generated reel renders (ignore individual runs; demo-reel.mp4 is committed as fallback)
+public/reels/
+composition/assets/avatar-*.mp4
+composition/renders/
+
 # vercel
 .vercel
 
