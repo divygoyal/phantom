@@ -9,7 +9,7 @@ Local-only. Clone, run, paste a URL.
 
 ## What it does
 
-You open `/live-run` on `localhost:3002`, paste any X post (with or without video) or news article URL, and click Run.
+Open `http://localhost:3002/live-run`, paste any X post (with or without video) or news article URL, and click Run.
 
 Behind the scenes, Phantom delegates the entire reel pipeline to Claude Code's `reel-production` skill running as a subprocess. The skill does everything:
 
