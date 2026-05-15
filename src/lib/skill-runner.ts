@@ -51,6 +51,15 @@ export async function* runReelViaSkill(
   const skillOutputDir = path.join(WORKSPACE_ROOT, "output", "breaking", skillSlug);
   await fs.mkdir(skillOutputDir, { recursive: true });
 
+  // Pre-flight: nuke the Remotion bundle cache. The skill bundles publicDir
+  // contents into AppData/Local/Temp/remotion-reel-bundle-cache/<hash>/public/
+  // and reuses them on cache-hit. The cache key doesn't hash the public files
+  // themselves, so a hit serves last run's input/heygen-audio.wav even when
+  // input/heygen-greenscreen.mp4 has been replaced for this run. That produced
+  // Frankenstein reels (new visuals + previous run's avatar voice). Wiping the
+  // cache every run costs ~1-2 min of re-bundle time and guarantees freshness.
+  await clearRemotionBundleCache();
+
   const prompt = buildPrompt(url, skillSlug);
   const startTime = Date.now();
 
@@ -58,7 +67,7 @@ export async function* runReelViaSkill(
     step: "skill-invoke",
     message: "Invoking reel-production skill (this typically takes 15-30 min)",
     status: "running",
-    output: `cwd: ${WORKSPACE_ROOT}\nslug: ${skillSlug}\nphases: 0 → 0.5 → 1 → 2 → 3 → 4 → 5\nthe skill: ingests URL, dense-scans source video, picks tone/hook/structure, writes script, renders HeyGen avatar via API, cuts source clips at natural durations, runs Phase 3 critique, renders the composition (1100+ frames @ 30fps × 8 workers), mobile-safe encode\nliveness: tail the workspace's output/breaking/${skillSlug}/ for new artifacts as phases complete`,
+    output: `cwd: ${WORKSPACE_ROOT}\nslug: ${skillSlug}\nphases: 0 → 0.5 → 1 → 2 → 3 → 4 → 5\nthe skill: ingests URL, dense-scans source video, picks tone/hook/structure, writes script, renders HeyGen avatar via API, cuts source clips at natural durations, runs Phase 3 critique, renders the composition (1100+ frames @ 30fps × 8 workers), mobile-safe encode\nliveness: tail the workspace's output/breaking/${skillSlug}/ for new artifacts as phases complete\nbundle-cache: cleared pre-flight to avoid stale public files`,
   };
 
   // Heartbeat queue: collect events from the file watcher and the periodic
@@ -249,6 +258,35 @@ export async function* runReelViaSkill(
     status: "done",
     output: `from: ${foundMp4}\nto:   ${phantomMp4}\nsize: ${((await fs.stat(phantomMp4)).size / 1_000_000).toFixed(1)} MB`,
   };
+}
+
+/**
+ * Wipe the Remotion bundle cache before each skill run.
+ *
+ * Remotion's `bundle()` populates AppData/Local/Temp/remotion-reel-bundle-cache/
+ * <hash>/public/ with the workspace's publicDir contents at bundle time. On a
+ * later run, if the bundle hash hits, Remotion reuses the cached public files —
+ * including `input/heygen-audio.wav`. Since the cache key doesn't include the
+ * hashes of those files, a run that replaces `input/heygen-greenscreen.mp4`
+ * (and writes a fresh `input/heygen-audio.wav`) still gets served the previous
+ * run's audio at render time. Symptom: new visuals + previous run's avatar
+ * voice in the composed mp4.
+ *
+ * Cheapest reliable fix: blow the cache away every run. Costs ~1-2 min of
+ * re-bundle work; guarantees the live publicDir is what gets rendered.
+ */
+async function clearRemotionBundleCache(): Promise<void> {
+  const cacheDir = path.join(
+    process.env.LOCALAPPDATA ||
+      path.join(process.env.USERPROFILE || "", "AppData", "Local"),
+    "Temp",
+    "remotion-reel-bundle-cache"
+  );
+  try {
+    await fs.rm(cacheDir, { recursive: true, force: true });
+  } catch {
+    // Cache may not exist on first run — that's fine, nothing to clear.
+  }
 }
 
 /**
