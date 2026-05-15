@@ -22,13 +22,9 @@
 
 ## Demo
 
-[![Watch the 75-second walkthrough](public/walkthrough-thumb.jpg)](https://github.com/divygoyal/phantom/raw/master/public/walkthrough.mp4)
+> 75-second walkthrough — paste an X URL, watch the 8-stage pipeline animate, download the finished reel.
 
-**Click the thumbnail above** for the 75-second walkthrough — paste an X URL, watch the 8-stage pipeline animate, download the finished reel.
-
-<sub>(Also embeds inline on platforms that support HTML5 video:)</sub>
-
-<video src="https://github.com/divygoyal/phantom/raw/master/public/walkthrough.mp4" controls width="100%"></video>
+https://github.com/user-attachments/assets/6f9cde7c-5da2-4199-a606-4033b43a0331
 
 ---
 
