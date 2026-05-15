@@ -61,29 +61,88 @@ async function generateWithAnthropic(opts: GenerateOptions): Promise<string> {
 }
 
 // === Claude Code (shell out to local CLI) ===
+//
+// On Windows, `claude` resolves to `claude.cmd` (npm shim). Spawning via
+// `shell: true` lets cmd.exe find it. The previous version piped stdin from
+// Node directly, but cmd.exe's stdin handling for .cmd scripts is unreliable —
+// it buffered or dropped the prompt entirely, causing Claude to return empty
+// stdout. We now stage the prompt into a temp file and use shell redirection
+// (`claude --print < tempfile`) which cmd.exe handles correctly.
 
 async function generateWithClaudeCode(opts: GenerateOptions): Promise<string> {
   const { spawn } = await import("node:child_process");
+  const { promises: fs } = await import("node:fs");
+  const path = await import("node:path");
+  const os = await import("node:os");
+
+  const full = opts.system
+    ? `${opts.system}\n\n---\n\n${opts.prompt}`
+    : opts.prompt;
+
+  const tempFile = path.join(
+    os.tmpdir(),
+    `phantom-prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+  );
+  await fs.writeFile(tempFile, full, "utf8");
+
+  const timeoutMs = 120_000; // 2 min hard cap per call
 
   return new Promise<string>((resolve) => {
-    const args = ["--print"];
-    const full = opts.system
-      ? `${opts.system}\n\n---\n\n${opts.prompt}`
-      : opts.prompt;
+    let settled = false;
+    const settle = (value: string) => {
+      if (settled) return;
+      settled = true;
+      // Best-effort cleanup
+      fs.unlink(tempFile).catch(() => {});
+      resolve(value);
+    };
 
-    const proc = spawn("claude", args, {
+    // Use shell redirection so cmd.exe pipes the file into claude's stdin.
+    // The `--print` flag plus stdin file gives the response on stdout.
+    const cmd = `claude --print < "${tempFile}"`;
+    const proc = spawn(cmd, [], {
       shell: true,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
 
     let stdout = "";
+    let stderr = "";
     proc.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    proc.on("close", () => resolve(stdout.trim() || generateScripted(opts)));
-    proc.on("error", () => resolve(generateScripted(opts)));
+    proc.stderr.on("data", (chunk) => (stderr += chunk.toString()));
 
-    proc.stdin.write(full);
-    proc.stdin.end();
+    const timer = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {
+        /* ignore */
+      }
+      console.error(
+        `claude-code timed out after ${timeoutMs}ms; stderr tail:`,
+        stderr.slice(-300)
+      );
+      settle(generateScripted(opts));
+    }, timeoutMs);
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      const text = stdout.trim();
+      if (code === 0 && text) {
+        settle(text);
+      } else {
+        console.error(
+          `claude-code exited ${code} with ${text.length} chars stdout; stderr:`,
+          stderr.slice(-300)
+        );
+        settle(generateScripted(opts));
+      }
+    });
+
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      console.error("claude-code spawn error:", err);
+      settle(generateScripted(opts));
+    });
   });
 }
 
