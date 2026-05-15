@@ -72,11 +72,11 @@ The orchestrator and the skill subprocess communicate via **the filesystem**. Ev
 ## Inspiration
 
 - 📺 **Channel we're building this for:** [@AISimplifiedu](https://www.youtube.com/@AISimplifiedu) — a creator-built YouTube channel covering AI news entirely through 9:16 reels.
-- 🧠 **Editorial voice we're encoding:** [@VarunMayya](https://www.youtube.com/@VarunMayya) — punchy hooks, plain-spoken pacing, structure that survives the first 2 seconds.
+- 🧠 **Editorial voice we're encoding:** the patterns common to viral AI-creator YouTube reels — punchy hooks, plain-spoken pacing, structures that survive the first 2 seconds.
 
 Every reel on [@AISimplifiedu](https://www.youtube.com/@AISimplifiedu) used to take **4–6 hours** of manual work: pick a topic from the day's noise, write a hook, script every beat in spoken voice, source the B-roll, build the 1080×1920 layout, time the captions to each word, mix the SFX, mobile-encode.
 
-The skill behind Phantom — `reel-production` — was **trained on dozens of viral YouTube reels from creators like [@VarunMayya](https://www.youtube.com/@VarunMayya)** by recognising the common patterns they share: hook archetypes that survive the first 2 seconds, beat structures that hold retention through 60s, caption rhythms that match spoken cadence, SFX choices that punctuate without distracting. Those patterns became rubrics, a 20-signal critique pass, and reference catalogs the agent consults on every URL.
+The skill behind Phantom — `reel-production` — was **trained on dozens of viral YouTube reels** by recognising the common patterns they share: hook archetypes that survive the first 2 seconds, beat structures that hold retention through 60s, caption rhythms that match spoken cadence, SFX choices that punctuate without distracting. Those patterns became rubrics, a 20-signal critique pass, and reference catalogs the agent consults on every URL.
 
 Phantom is the wrapper that exposes that skill as a single web action — paste URL, get reel — without any of the human-in-the-loop steps in between.
 
