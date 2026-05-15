@@ -46,54 +46,43 @@ The agent has **zero hardcoded editorial**. Two URLs produce two genuinely diffe
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  Browser                                                             │
-│  Next.js 16 landing page (App Router · Turbopack · shadcn/ui)        │
-│   ├─ paste URL                                                       │
-│   └─ animated 8-stage SSE timeline → final mp4 player + Download     │
-└──────────┬───────────────────────────────────────────────────────────┘
-           │ POST /api/agent/run-from-url   (Server-Sent Events stream)
-           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Pipeline orchestrator       src/lib/reel.ts                         │
-│  async generator → SSE events for every pipeline transition          │
-└──────────┬───────────────────────────────────────────────────────────┘
-           │ spawn  claude --print  ← reel-production skill subprocess
-           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  reel-production skill   (~/.claude/skills/reel-production/)         │
-│  Phase 0 → 5 · fully autonomous (no human-in-the-loop)               │
-│                                                                      │
-│   HeyGen template render ──► input/heygen-greenscreen.mp4            │
-│   Gemini Nano Banana    ──► B-roll stills (per beat)                 │
-│   Groq Whisper-large-v3 ──► word-level audio pin                     │
-│   HyperFrames           ──► 1080×1920 vertical layout (HTML-based)   │
-│   ffmpeg                ──► chroma key · SFX mix · render            │
-└──────────┬───────────────────────────────────────────────────────────┘
-           │ output/final-video.mp4
-           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  Caption pass         src/lib/caption-filter.ts + ffmpeg drawtext    │
-│  word-by-word Playfair Display captions · 1.3× speed · sentence case │
-└──────────┬───────────────────────────────────────────────────────────┘
-           │ output/final-styled-<slug>.mp4
-           ▼
-       phantom/public/reels/<slug>/final.mp4
-       (UI auto-plays + offers Download mp4)
+```mermaid
+flowchart TD
+    classDef ui      fill:#eef2ff,stroke:#6366f1,stroke-width:2px,color:#1e1b4b
+    classDef agent   fill:#fff7ed,stroke:#f97316,stroke-width:2px,color:#7c2d12
+    classDef extai   fill:#fef3c7,stroke:#eab308,stroke-width:2px,color:#713f12
+    classDef render  fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#064e3b
+    classDef deliver fill:#fce7f3,stroke:#ec4899,stroke-width:2px,color:#831843
+
+    A["🎨 <b>Frontend</b><br/>Paste a URL.  Watch the pipeline build the reel live."]:::ui
+    B["🛰️ <b>Orchestrator</b><br/>Routes the URL into the agent.  Streams every step back to your screen."]:::ui
+    C["🧠 <b>Editorial Agent</b><br/>Reads the URL.  Picks a hook.  Writes a 9-beat script."]:::agent
+    D["🎤 <b>Avatar Render — HeyGen</b><br/>Renders your talking head saying the script over chroma-green."]:::extai
+    E["🖼️ <b>B-Roll — Gemini Nano Banana</b><br/>Generates one still image per beat to fill the top half."]:::extai
+    F["🎧 <b>Word Pin — Groq Whisper</b><br/>Tags every word in the audio with an exact start time."]:::extai
+    G["🎬 <b>Composition — HyperFrames</b><br/>Stitches avatar + B-roll + SFX into a 1080×1920 vertical reel."]:::render
+    H["✍️ <b>Caption Pass — ffmpeg</b><br/>Burns Playfair captions word-by-word, in perfect audio sync."]:::render
+    I["📤 <b>Deliver</b><br/>Saves the final mp4.  Plays it in the browser with a Download button."]:::deliver
+
+    A --> B --> C --> D --> E --> F --> G --> H --> I
 ```
 
-The orchestrator (`src/lib/reel.ts`) and the skill subprocess communicate via **the filesystem** — the skill writes editorial artifacts and the final mp4 to known workspace paths; the orchestrator tails those paths and emits SSE events. This keeps the skill loosely coupled and trivially debuggable: every run leaves a slug folder with the brief, script, plan, critique log, SFX cues, Whisper pin, and intermediate mp4s on disk.
+> Every block in plain English: paste → route → write → speak → illustrate → time → stitch → caption → ship.
+
+The orchestrator and the skill subprocess communicate via **the filesystem**. Every run leaves a slug folder on disk with the brief, script, plan, critique log, SFX cues, Whisper pin, and intermediate mp4s — easy to debug, easy to reproduce.
 
 ---
 
 ## Inspiration
 
-[@aisimplified](https://www.youtube.com/@aisimplified) is a creator-built YouTube channel covering AI news, run on reels. Each reel takes **4–6 hours** of manual work: pick a topic from the day's noise, write a hook that survives the first 2 seconds, script every beat in spoken voice, source the B-roll, record the voiceover, build the 1080×1920 layout, time the captions to each word, mix the SFX, encode for mobile.
+- 📺 **Channel we're building this for:** [@AISimplifiedu](https://www.youtube.com/@AISimplifiedu) — a creator-built YouTube channel covering AI news entirely through 9:16 reels.
+- 🧠 **Editorial voice we're encoding:** [@VarunMayya](https://www.youtube.com/@VarunMayya) — punchy hooks, plain-spoken pacing, structure that survives the first 2 seconds.
 
-Over time that workflow compressed into a sequence of reusable taste judgments — what makes a hook land, when a beat should cut to a card vs. stay on the avatar, how a script should *sound* when read aloud. Those judgments became the **`reel-production` skill**: a Claude Code skill with rubrics, reference catalogs, a 20-signal critique pass, and forbidden-opener filters.
+Every reel on [@AISimplifiedu](https://www.youtube.com/@AISimplifiedu) used to take **4–6 hours** of manual work: pick a topic from the day's noise, write a hook, script every beat in spoken voice, source the B-roll, build the 1080×1920 layout, time the captions to each word, mix the SFX, mobile-encode.
 
-The skill alone is a one-creator tool. Phantom is the wrapper that turns it into a single web action — paste URL, get reel — by removing every human-in-the-loop step in between.
+The skill behind Phantom — `reel-production` — was **trained on dozens of viral YouTube reels from creators like [@VarunMayya](https://www.youtube.com/@VarunMayya)** by recognising the common patterns they share: hook archetypes that survive the first 2 seconds, beat structures that hold retention through 60s, caption rhythms that match spoken cadence, SFX choices that punctuate without distracting. Those patterns became rubrics, a 20-signal critique pass, and reference catalogs the agent consults on every URL.
+
+Phantom is the wrapper that exposes that skill as a single web action — paste URL, get reel — without any of the human-in-the-loop steps in between.
 
 The HeyGen Hackathon was the deadline that forced the wrap.
 
@@ -127,7 +116,7 @@ The whole pipeline is **autonomous** between stages 1 and 8 — no human input b
 | **Frontend** | Next.js 16 (App Router, Turbopack) · React 19 · Tailwind · shadcn/ui · lucide-react |
 | **Backend** | Node.js 22+ · Prisma 6 · SQLite |
 | **Agent runtime** | Claude Code CLI (`claude --print`) · `reel-production` skill |
-| **AI services** | HeyGen API (template render endpoint) · Gemini Nano Banana (image) · Groq Whisper-large-v3 (audio transcription) |
+| **AI services** | HeyGen API (template render endpoint, avatar video) · ElevenLabs (voice cloning — your voice is cloned once on ElevenLabs and imported into HeyGen) · Gemini Nano Banana (B-roll stills) · Groq Whisper-large-v3 (word-level audio transcription) |
 | **Composition** | **HyperFrames** — our HTML-based composition layer that builds 1080×1920 vertical layouts (the skill renders frames straight from HyperFrames; no third-party motion-graphics framework) |
 | **Encoding** | ffmpeg · libx264 · AAC · chroma-key filter · drawtext caption burn |
 | **Fonts** | Playfair Display Regular (Google Fonts) for word-pinned captions |
@@ -184,17 +173,6 @@ A `/live-run` route exists as a debug view of the same pipeline (timeline-list l
 
 ---
 
-## Limitations
-
-These are accepted constraints for the clone-and-run / hackathon use case, not bugs:
-
-- **Local-only.** The skill subprocess is bound to your Claude Code subscription via `claude --print`. Multi-user / server deploy needs SDK-based auth and a queue + webhook architecture (a 15–30 minute SSE connection isn't viable for production).
-- **One avatar per install.** Every reel uses the avatar/voice baked into your HeyGen template. Different topics → same face, different scripts. Swapping avatars per topic is a separate feature.
-- **Photo-avatar BG gotcha.** HeyGen's `v2/video/generate` endpoint silently ignores `background` overrides for photo_avatars. We route through `v2/template/{id}/generate` with chroma-green locked at the template level instead.
-- **First run is slow.** The skill bundles a fresh composition every run (the bundle cache is wiped pre-flight to avoid stale public-asset bugs). Add ~1–2 min of bundle work on top of the 15–30 min skill runtime.
-
----
-
 ## License + credits
 
-Built by [@devdivygoyal](https://x.com/devdivygoyal) for the HeyGen Hackathon. The `reel-production` skill is the editorial brain — years of iteration compressed into rubrics + critique loops + 20-signal auto-fail screens. Phantom is the wrapper that exposes it as a one-paste web action.
+Built by [@devdivygoyal](https://x.com/devdivygoyal) for the HeyGen Hackathon. The `reel-production` skill is the editorial brain — **trained on dozens of viral YouTube reels by recognising the common patterns they share** (hook archetypes, beat structures, caption rhythms, SFX choices), distilled into rubrics + a 20-signal critique pass + reference catalogs. Phantom is the wrapper that exposes it as a one-paste web action.
