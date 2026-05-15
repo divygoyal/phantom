@@ -42,8 +42,12 @@ prisma/prisma/
 # Generated reel renders (ignore individual runs; demo-reel.mp4 is committed as fallback)
 public/reels/
 composition/assets/avatar-*.mp4
+composition/assets/avatar-*.webm
 composition/assets/gemini-*.png
 composition/renders/
+
+# Source-video cache (re-downloaded per run)
+.cache/
 
 # vercel
 .vercel

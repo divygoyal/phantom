@@ -19,6 +19,46 @@ import {
   Newspaper,
 } from "lucide-react";
 
+const STAGES = [
+  { label: "Fetching source content", detail: "Scraping x.com" },
+  { label: "Extracting key claims", detail: "GPT-4o · 4 chunks" },
+  { label: "Drafting viral hook", detail: "12 variants scored" },
+  { label: "Writing scene script", detail: "4 scenes · 58s cut" },
+  { label: "Synthesizing voiceover", detail: "ElevenLabs · Brian" },
+  { label: "Generating B-roll", detail: "FLUX 1.1 · 8 shots" },
+  { label: "Matching trending audio", detail: "342 tracks ranked" },
+  { label: "Burning captions", detail: "Word-level sync" },
+  { label: "Rendering 9:16 frames", detail: "1800 frames · GPU" },
+  { label: "Encoding 1080p H.264", detail: "ffmpeg · veryfast" },
+  { label: "Mastering audio", detail: "−14 LUFS" },
+  { label: "Finalizing reel", detail: "Packaging MP4" },
+] as const;
+
+const SUGGESTIONS = [
+  { label: "Try: ChatGPT viral prompt", value: "https://x.com/altryne/status/1843921478239827841" },
+  { label: "AI breakthrough X post", value: "https://x.com/openai/status/1839921478239827841" },
+  { label: "Startup funding news", value: "https://techcrunch.com/2026/05/15/ai-startup-mega-round/" },
+] as const;
+
+const TOTAL_FRAMES = 1800;
+const FAKE_DURATION_SEC = 298;
+const REAL_DURATION_MS = 10000;
+
+function formatEta(sec: number) {
+  const s = Math.max(0, Math.round(sec));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-3 py-2 rounded-xl bg-secondary/60 border border-border/60 flex items-baseline justify-between gap-2 min-w-0">
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground shrink-0">{label}</span>
+      <span className="text-xs font-mono font-medium tabular-nums truncate">{value}</span>
+    </div>
+  );
+}
+
 export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground antialiased overflow-x-hidden">
@@ -29,7 +69,6 @@ export default function Landing() {
       <Features />
       <HowItWorks />
       <Showcase />
-      <Pricing />
       <FAQ />
       <CTA />
       <Footer />
@@ -51,7 +90,6 @@ function Nav() {
           <a href="#features" className="hover:text-foreground transition">Features</a>
           <a href="#how" className="hover:text-foreground transition">How it works</a>
           <a href="#showcase" className="hover:text-foreground transition">Showcase</a>
-          <a href="#pricing" className="hover:text-foreground transition">Pricing</a>
         </nav>
         <Button size="sm" className="rounded-full bg-foreground text-background hover:bg-foreground/90">
           Try free <ArrowRight className="size-4" />
@@ -131,17 +169,25 @@ function Hero() {
             {/* X post card */}
             <Card className="p-5 rounded-2xl border-border/60 shadow-[var(--shadow-card)] bg-background">
               <div className="flex items-start gap-3">
-                <div className="size-10 rounded-full bg-foreground grid place-items-center text-background font-bold text-sm shrink-0">𝕏</div>
+                <div className="size-10 rounded-full bg-gradient-to-br from-pink-300 to-rose-400 grid place-items-center text-white font-bold text-sm shrink-0">c</div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">@elonmusk</p>
-                  <p className="text-xs text-muted-foreground">2h · 14.2M views</p>
+                  <p className="text-sm font-semibold">
+                    coco <span className="font-normal text-muted-foreground">@DawnKasie49448 · May 14</span>
+                  </p>
                 </div>
               </div>
               <p className="mt-3 text-sm leading-relaxed">
-                Neuralink just enabled a paralyzed patient to control a robotic arm with their thoughts. The future is now.
+                Did this <span className="font-semibold">robot</span> get drunk or what?
+                <br />
+                Its moves keep getting crazier.
+                <br />
+                Not sure if it&apos;s <span className="font-semibold">dancing</span>… or suddenly gained a soul. 😂
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-brand">
+                #Robot <span>#SoulDancer</span> <span>#TechHumor</span> <span>#FutureWorld</span> <span>#AI</span>
               </p>
               <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-                <span>↻ 48k</span><span>♡ 312k</span><span>↗ 22k</span>
+                <span>↻ 18k</span><span>♡ 142k</span><span>↗ 9.4k</span>
               </div>
             </Card>
 
@@ -176,20 +222,23 @@ function Hero() {
             <div className="relative mx-auto w-full max-w-[260px]">
               <div className="absolute -inset-3 bg-hero rounded-[2rem] blur-2xl opacity-40" />
               <div className="relative aspect-[9/16] rounded-[1.75rem] overflow-hidden border-4 border-foreground shadow-[var(--shadow-card)]">
-                <img src="/hero.jpg" alt="Viral reel preview" width={540} height={960} className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30" />
-                <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-white text-xs">
+                <video
+                  src="/videos/hero-robot-dance.mp4"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                <div className="pointer-events-none absolute top-3 left-3 right-3 flex items-center justify-between text-white text-xs">
                   <Badge className="bg-red-500 border-0 text-white">● LIVE</Badge>
-                  <span className="font-mono">0:47</span>
+                  <span className="font-mono">0:34</span>
                 </div>
-                <div className="absolute inset-0 grid place-items-center">
-                  <div className="size-14 rounded-full bg-white/95 grid place-items-center shadow-2xl">
-                    <Play className="size-5 fill-foreground text-foreground ml-0.5" />
-                  </div>
-                </div>
-                <div className="absolute bottom-4 left-4 right-4 text-white">
+                <div className="pointer-events-none absolute bottom-4 left-4 right-4 text-white">
                   <p className="text-xs font-bold uppercase tracking-wider opacity-80">YouTube Shorts</p>
-                  <p className="text-base font-bold leading-tight mt-1">&ldquo;This Neuralink update will blow your mind 🤯&rdquo;</p>
+                  <p className="text-base font-bold leading-tight mt-1">&ldquo;This robot dancing looks TOO real 🤯&rdquo;</p>
                   <div className="mt-2 flex items-center gap-3 text-xs">
                     <span className="flex items-center gap-1">▶ 2.1M</span>
                     <span className="flex items-center gap-1">♡ 184k</span>
@@ -228,34 +277,36 @@ function LogoStrip() {
 
 function Generator() {
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [output, setOutput] = useState<null | {
-    hook: string;
-    script: { time: string; scene: string; voiceover: string }[];
-    caption: string;
-    hashtags: string[];
-    music: string;
-  }>(null);
+  const [phase, setPhase] = useState<"idle" | "rendering" | "done">("idle");
+  const [progress, setProgress] = useState(0);
+  const [stageIdx, setStageIdx] = useState(0);
+  const [etaSec, setEtaSec] = useState(FAKE_DURATION_SEC);
+  const [frame, setFrame] = useState(0);
+  const [fps, setFps] = useState(142);
+  const [vramGb, setVramGb] = useState(2.1);
 
-  const handle = () => {
+  const start = () => {
     if (!input.trim()) return;
-    setLoading(true);
-    setOutput(null);
-    setTimeout(() => {
-      setOutput({
-        hook: "You won't believe what just happened in the AI world…",
-        script: [
-          { time: "0:00", scene: "Close-up reaction to phone screen", voiceover: "Stop scrolling. This changes everything." },
-          { time: "0:08", scene: "Text overlay with breaking headline", voiceover: "Here's what just dropped — and why it matters to you." },
-          { time: "0:22", scene: "Quick cuts of B-roll + screen recording", voiceover: "Three things you need to know right now." },
-          { time: "0:40", scene: "Direct-to-camera CTA", voiceover: "Follow for more — I break down a story like this every day." },
-        ],
-        caption: "The internet is losing it over this 👇 Save this before it gets buried.",
-        hashtags: ["#shorts", "#ai", "#breakingnews", "#tech", "#viral"],
-        music: "Upbeat lo-fi build → drop at 0:22 (Trending: 'Aesthetic' — Tollan Kim)",
-      });
-      setLoading(false);
-    }, 1400);
+    setPhase("rendering");
+    setProgress(0);
+    setStageIdx(0);
+    setEtaSec(FAKE_DURATION_SEC);
+    setFrame(0);
+
+    const startedAt = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / REAL_DURATION_MS);
+      const eased = 1 - Math.pow(1 - t, 1.5);
+      setProgress(eased * 100);
+      setEtaSec(FAKE_DURATION_SEC * (1 - eased));
+      setFrame(Math.round(TOTAL_FRAMES * eased));
+      setStageIdx(Math.min(STAGES.length - 1, Math.floor(t * STAGES.length)));
+      setFps(110 + Math.round(Math.random() * 60));
+      setVramGb(2 + Math.round((eased * 5 + Math.random() * 0.5) * 10) / 10);
+      if (t < 1) requestAnimationFrame(tick);
+      else setPhase("done");
+    };
+    requestAnimationFrame(tick);
   };
 
   return (
@@ -281,29 +332,36 @@ function Generator() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="https://x.com/openai/status/... or paste a TechCrunch article…"
             className="min-h-[140px] text-base resize-none rounded-2xl border-border/60 focus-visible:ring-brand/40"
+            disabled={phase === "rendering"}
           />
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
-              {["AI breakthrough X post", "Sports headline", "Startup funding news"].map((s) => (
+              {SUGGESTIONS.map((s) => (
                 <button
-                  key={s}
-                  onClick={() => setInput(s)}
-                  className="text-xs px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/70 transition"
+                  key={s.label}
+                  type="button"
+                  onClick={() => setInput(s.value)}
+                  disabled={phase === "rendering"}
+                  className="text-xs px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/70 transition disabled:opacity-50"
                 >
-                  {s}
+                  {s.label}
                 </button>
               ))}
             </div>
             <Button
-              onClick={handle}
-              disabled={loading}
+              onClick={start}
+              disabled={phase === "rendering"}
               size="lg"
               className="rounded-full h-12 px-6 bg-foreground text-background hover:bg-foreground/90"
             >
-              {loading ? (
+              {phase === "rendering" ? (
                 <>
                   <span className="size-4 rounded-full border-2 border-background/40 border-t-background animate-spin" />
                   Forging your reel…
+                </>
+              ) : phase === "done" ? (
+                <>
+                  Generate another <Wand2 className="size-4" />
                 </>
               ) : (
                 <>
@@ -314,49 +372,288 @@ function Generator() {
           </div>
         </Card>
 
-        {output && (
-          <Card className="mt-6 p-6 md:p-8 rounded-3xl border-border/60 shadow-[var(--shadow-card)] animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="md:col-span-2 space-y-6">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hook (0–3s)</p>
-                  <p className="text-2xl font-semibold leading-tight">&ldquo;{output.hook}&rdquo;</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Scene-by-scene script</p>
-                  <ol className="space-y-3">
-                    {output.script.map((s, i) => (
-                      <li key={i} className="flex gap-4 p-3 rounded-2xl bg-secondary/50">
-                        <span className="text-sm font-mono text-brand font-semibold pt-0.5">{s.time}</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{s.scene}</p>
-                          <p className="text-sm text-muted-foreground mt-0.5">&ldquo;{s.voiceover}&rdquo;</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </div>
-              <div className="space-y-5">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Caption</p>
-                  <p className="text-sm">{output.caption}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hashtags</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {output.hashtags.map((h) => (
-                      <span key={h} className="text-xs px-2 py-1 rounded-full bg-secondary">{h}</span>
-                    ))}
+        {(phase === "rendering" || phase === "done") && (
+          <Card className="relative mt-6 p-6 md:p-8 rounded-3xl border-border/60 shadow-[var(--shadow-card)] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div
+              aria-hidden
+              className="absolute -inset-8 opacity-25 -z-10 pointer-events-none"
+              style={{ background: "var(--gradient-hero)", filter: "blur(80px)" }}
+            />
+
+            {phase === "done" && (
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-6 animate-in fade-in slide-in-from-top-2 duration-500">
+                <div className="flex items-center gap-3">
+                  <span className="size-9 rounded-full bg-brand text-white grid place-items-center shadow-[var(--shadow-glow)]">
+                    <Check className="size-4" strokeWidth={3} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">Reel ready to ship</p>
+                    <p className="text-xs text-muted-foreground">
+                      Rendered in <span className="font-mono">4:58</span> · 1080×1920 · 6.2 MB
+                    </p>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Music cue</p>
-                  <p className="text-sm text-muted-foreground">{output.music}</p>
+                <Badge className="rounded-full bg-hero text-white border-0">@aisimplified</Badge>
+              </div>
+            )}
+
+            <div className="grid md:grid-cols-[1.05fr_1fr] gap-6 md:gap-8">
+              {/* Unified preview box — renders animation, then morphs to play the video */}
+              <div className="relative mx-auto w-full max-w-[300px] md:max-w-none">
+                <div
+                  className="relative aspect-[9/16] rounded-2xl overflow-hidden border border-foreground/10 shadow-[var(--shadow-card)] transition-colors duration-700"
+                  style={{
+                    background: phase === "rendering" ? "var(--gradient-hero)" : "#000",
+                  }}
+                >
+                  {phase === "rendering" ? (
+                    <>
+                      <div className="absolute inset-0 grid grid-cols-6 grid-rows-10 gap-px p-px">
+                        {Array.from({ length: 60 }).map((_, i) => {
+                          const threshold = (i * 0.6180339887) % 1;
+                          const cleared = progress / 100 > threshold;
+                          return (
+                            <div
+                              key={i}
+                              className="transition-opacity duration-300"
+                              style={{
+                                opacity: cleared ? 0 : 0.55,
+                                background: "oklch(0.18 0.06 280)",
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      <div
+                        aria-hidden
+                        className="absolute left-0 right-0 h-[30%] pointer-events-none mix-blend-screen"
+                        style={{
+                          top: 0,
+                          animation: "renderScan 1.4s linear infinite",
+                          background:
+                            "linear-gradient(to bottom, transparent, oklch(1 0 0 / 0.55) 50%, transparent)",
+                        }}
+                      />
+
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white pointer-events-none">
+                        <p className="text-[10px] uppercase tracking-[0.3em] opacity-80 font-mono">Frame</p>
+                        <p className="text-5xl md:text-6xl font-bold font-mono tabular-nums tracking-tight drop-shadow">
+                          {String(frame).padStart(4, "0")}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-[0.2em] opacity-70 font-mono mt-1">
+                          of {TOTAL_FRAMES}
+                        </p>
+                      </div>
+
+                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                        <Badge className="bg-black/45 text-white border-0 backdrop-blur text-[10px] uppercase tracking-[0.2em] gap-1.5">
+                          <span className="size-1.5 rounded-full bg-red-400 animate-pulse" /> Rendering
+                        </Badge>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-white/80">
+                          1080×1920 · 30fps
+                        </span>
+                      </div>
+
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white/85 text-[10px] font-mono uppercase tracking-widest pointer-events-none">
+                        <span>9:16 · H.264</span>
+                        <span className="tabular-nums">{progress.toFixed(1)}%</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <video
+                        key="rendered-result"
+                        src="/videos/demo-chatgpt-viral.mp4"
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        controls
+                        preload="auto"
+                        className="absolute inset-0 w-full h-full object-cover animate-in fade-in zoom-in-95 duration-700"
+                      />
+                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
+                        <Badge className="bg-brand text-white border-0 text-[10px] uppercase tracking-[0.2em] gap-1.5 shadow-[var(--shadow-glow)]">
+                          <Check className="size-2.5" strokeWidth={3} /> Rendered
+                        </Badge>
+                        <span className="text-[10px] font-mono uppercase tracking-widest text-white/90 bg-black/40 backdrop-blur px-2 py-0.5 rounded-full">
+                          1080×1920 · 30fps
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <Button className="w-full rounded-full bg-hero text-white border-0 hover:opacity-90">
-                  <Share2 className="size-4" /> Export to CapCut
-                </Button>
+                {phase === "done" && (
+                  <Badge className="absolute -top-2 -right-2 bg-brand text-white border-0 shadow-lg z-10">
+                    Viral 🔥
+                  </Badge>
+                )}
+              </div>
+
+              {/* Right panel — ETA + stages OR hook + caption + hashtags */}
+              <div className="flex flex-col min-w-0">
+                {phase === "rendering" ? (
+                  <>
+                    <div className="flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                          Estimated time left
+                        </p>
+                        <p className="text-5xl md:text-6xl font-semibold tracking-tighter font-mono tabular-nums leading-none mt-2">
+                          {formatEta(etaSec)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Forge</p>
+                        <p
+                          className="text-3xl font-semibold tracking-tight tabular-nums bg-clip-text text-transparent mt-2"
+                          style={{ backgroundImage: "var(--gradient-hero)" }}
+                        >
+                          {Math.floor(progress)}%
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="relative h-2 rounded-full bg-secondary overflow-hidden mt-5">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full"
+                        style={{
+                          width: `${progress}%`,
+                          background: "var(--gradient-hero)",
+                          transition: "width 80ms linear",
+                        }}
+                      />
+                      <div
+                        aria-hidden
+                        className="absolute inset-y-0 left-0 w-1/3 opacity-70 mix-blend-screen pointer-events-none"
+                        style={{
+                          animation: "renderShimmer 1.6s linear infinite",
+                          background:
+                            "linear-gradient(90deg, transparent, oklch(1 0 0 / 0.7), transparent)",
+                        }}
+                      />
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-3 gap-2">
+                      <StatPill label="GPU" value="A100" />
+                      <StatPill label="Throughput" value={`${fps} fps`} />
+                      <StatPill label="VRAM" value={`${vramGb.toFixed(1)} GB`} />
+                    </div>
+
+                    <div className="mt-6 space-y-1.5">
+                      {STAGES.map((s, i) => {
+                        const status: "done" | "active" | "pending" =
+                          i < stageIdx ? "done" : i === stageIdx ? "active" : "pending";
+                        return (
+                          <div key={s.label} className="flex items-center gap-2.5 text-sm">
+                            {status === "done" && (
+                              <span className="size-4 rounded-full bg-brand text-white grid place-items-center shrink-0">
+                                <Check className="size-2.5" strokeWidth={3} />
+                              </span>
+                            )}
+                            {status === "active" && (
+                              <span className="size-4 rounded-full border-2 border-brand border-t-transparent animate-spin shrink-0" />
+                            )}
+                            {status === "pending" && (
+                              <span className="size-4 rounded-full border border-border shrink-0" />
+                            )}
+                            <span
+                              className={
+                                status === "pending"
+                                  ? "text-muted-foreground"
+                                  : status === "active"
+                                  ? "font-medium"
+                                  : "text-muted-foreground line-through decoration-muted-foreground/40"
+                              }
+                            >
+                              {s.label}
+                            </span>
+                            {status === "active" && (
+                              <span className="ml-auto text-[11px] font-mono text-muted-foreground tabular-nums truncate hidden sm:inline">
+                                {s.detail}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-700">
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hook (0–3s)</p>
+                      <p className="text-xl md:text-2xl font-semibold leading-tight">
+                        &ldquo;This ChatGPT prompt is going viral — and it changes everything.&rdquo;
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Caption</p>
+                      <p className="text-sm">
+                        Save this before OpenAI patches it 👇 Three lines that turn ChatGPT into your personal research analyst.
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Hashtags</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["#shorts", "#chatgpt", "#aiprompts", "#productivity", "#viral"].map((h) => (
+                          <span key={h} className="text-xs px-2 py-1 rounded-full bg-secondary">{h}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Music cue</p>
+                      <p className="text-sm text-muted-foreground">
+                        Tense lo-fi build → drop at 0:14 · &ldquo;Aesthetic&rdquo; — Tollan Kim
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Button className="rounded-full bg-hero text-white border-0 hover:opacity-90">
+                        <Share2 className="size-4" /> Post to @aisimplified
+                      </Button>
+                      <Button variant="outline" className="rounded-full border-border bg-background/60">
+                        Download MP4
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Filmstrip — animates during render, locks to 100% when done */}
+            <div className="mt-7 pt-6 border-t border-border/60">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                  Timeline · {TOTAL_FRAMES} frames
+                </p>
+                <p className="text-xs font-mono text-muted-foreground tabular-nums">
+                  {phase === "done" ? TOTAL_FRAMES : frame} / {TOTAL_FRAMES}
+                </p>
+              </div>
+              <div
+                className="grid gap-1"
+                style={{ gridTemplateColumns: "repeat(36, minmax(0, 1fr))" }}
+              >
+                {Array.from({ length: 36 }).map((_, i) => {
+                  const p = phase === "done" ? 100 : progress;
+                  const filled = p / 100 > i / 36;
+                  const isCurrent =
+                    phase === "rendering" &&
+                    i / 36 < progress / 100 &&
+                    (i + 1) / 36 > progress / 100;
+                  return (
+                    <div
+                      key={i}
+                      className="h-7 rounded-md transition-all duration-300"
+                      style={{
+                        background: filled ? "var(--gradient-hero)" : "var(--color-secondary)",
+                        opacity: filled ? 1 : 0.5,
+                        transform: isCurrent ? "scaleY(1.25)" : "scaleY(1)",
+                        transformOrigin: "bottom",
+                      }}
+                    />
+                  );
+                })}
               </div>
             </div>
           </Card>
@@ -433,10 +730,30 @@ function HowItWorks() {
 
 function Showcase() {
   const items = [
-    { title: "OpenAI launches GPT-6", views: "3.2M", tag: "Tech" },
-    { title: "Bitcoin breaks $200k", views: "1.8M", tag: "Finance" },
-    { title: "Lakers stunning comeback", views: "2.4M", tag: "Sports" },
-    { title: "Apple Vision Pro 2 leak", views: "4.1M", tag: "Gadgets" },
+    {
+      src: "/videos/showcase-trump-phone.mp4",
+      title: "This $499 Trump Phone is INSANE 💀",
+      views: "3.2M",
+      tag: "Tech",
+    },
+    {
+      src: "/videos/showcase-higgsfield.mp4",
+      title: "Higgsfield MCP with Claude changes ads forever 🤯",
+      views: "1.8M",
+      tag: "AI tools",
+    },
+    {
+      src: "/videos/showcase-veo-seedance.mp4",
+      title: "Google Veo 4 vs Seedance 2.0 😳",
+      views: "2.4M",
+      tag: "AI video",
+    },
+    {
+      src: "/videos/showcase-google-cursor.mp4",
+      title: "Google just reinvented the cursor 🤯",
+      views: "4.1M",
+      tag: "AI",
+    },
   ];
   return (
     <section id="showcase" className="py-24 bg-secondary/40 border-y border-border/50">
@@ -450,85 +767,25 @@ function Showcase() {
           </div>
         </div>
         <div className="mt-14 grid grid-cols-2 lg:grid-cols-4 gap-5">
-          {items.map((item, i) => (
-            <div key={item.title} className="group cursor-pointer">
-              <div
-                className="aspect-[9/16] rounded-3xl border border-border/60 relative overflow-hidden"
-                style={{ background: "var(--gradient-hero)", filter: `hue-rotate(${i * 50}deg)` }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute top-3 left-3">
+          {items.map((item) => (
+            <div key={item.src} className="group">
+              <div className="aspect-[9/16] rounded-3xl border border-border/60 relative overflow-hidden bg-black shadow-[var(--shadow-card)]">
+                <video
+                  src={item.src}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div className="pointer-events-none absolute top-3 left-3 z-10">
                   <Badge className="bg-background/80 text-foreground border-0 backdrop-blur">{item.tag}</Badge>
                 </div>
-                <div className="absolute inset-0 grid place-items-center">
-                  <div className="size-14 rounded-full bg-background/90 grid place-items-center group-hover:scale-110 transition">
-                    <Play className="size-5 fill-foreground text-foreground" />
-                  </div>
-                </div>
-                <div className="absolute bottom-3 left-3 right-3 text-white">
-                  <p className="text-sm font-semibold leading-tight">{item.title}</p>
-                  <p className="text-xs opacity-80 mt-1">{item.views} views</p>
-                </div>
+              </div>
+              <div className="mt-3 px-1">
+                <p className="text-sm font-semibold leading-tight">{item.title}</p>
+                <p className="text-xs text-muted-foreground mt-1">{item.views} views</p>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Pricing() {
-  const tiers = [
-    { name: "Starter", price: "$0", desc: "Try it out", features: ["3 reels / month", "Basic hooks", "Standard export"], cta: "Start free" },
-    { name: "Creator", price: "$19", desc: "For daily posters", features: ["Unlimited reels", "Viral hook engine", "Trending music cues", "CapCut export"], cta: "Go viral", featured: true },
-    { name: "Studio", price: "$49", desc: "For teams & agencies", features: ["Everything in Creator", "5 brand voices", "Team workspace", "Priority support"], cta: "Contact sales" },
-  ];
-  return (
-    <section id="pricing" className="py-24">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="text-center max-w-2xl mx-auto">
-          <Badge variant="outline" className="rounded-full">Pricing</Badge>
-          <h2 className="mt-4 text-4xl md:text-5xl font-semibold tracking-tight">
-            Simple pricing. Built for creators.
-          </h2>
-        </div>
-        <div className="mt-14 grid md:grid-cols-3 gap-5">
-          {tiers.map((t) => (
-            <Card
-              key={t.name}
-              className={`p-8 rounded-3xl border-border/60 ${
-                t.featured ? "border-foreground/80 shadow-[var(--shadow-glow)] relative" : ""
-              }`}
-            >
-              {t.featured && (
-                <Badge className="absolute -top-3 left-8 bg-hero text-white border-0">
-                  Most popular
-                </Badge>
-              )}
-              <h3 className="text-lg font-semibold">{t.name}</h3>
-              <p className="text-sm text-muted-foreground mt-1">{t.desc}</p>
-              <p className="mt-6 text-5xl font-semibold tracking-tight">
-                {t.price}
-                <span className="text-base font-normal text-muted-foreground">/mo</span>
-              </p>
-              <Button
-                className={`mt-6 w-full rounded-full ${
-                  t.featured
-                    ? "bg-foreground text-background hover:bg-foreground/90"
-                    : "bg-secondary text-foreground hover:bg-secondary/70"
-                }`}
-              >
-                {t.cta}
-              </Button>
-              <ul className="mt-8 space-y-3">
-                {t.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm">
-                    <Check className="size-4 text-brand" /> {f}
-                  </li>
-                ))}
-              </ul>
-            </Card>
           ))}
         </div>
       </div>

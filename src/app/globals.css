@@ -1,3 +1,4 @@
+/* viral-reel-studio design tokens */
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -153,4 +154,14 @@
 
 @utility bg-hero {
   background-image: var(--gradient-hero);
+}
+
+@keyframes renderScan {
+  0%   { top: -30%; }
+  100% { top: 100%; }
+}
+
+@keyframes renderShimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
 }
