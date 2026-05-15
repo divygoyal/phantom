@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Play, Loader2, CheckCircle2, AlertTriangle, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 type StreamEvent = {
   id: string;
@@ -76,7 +78,6 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
               setVideoUrl(event.data.videoUrl);
             }
             setSteps((prev) => {
-              // Upsert by step
               const idx = prev.findIndex((s) => s.step === event.step);
               if (idx >= 0) {
                 const next = [...prev];
@@ -105,53 +106,48 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
   return (
     <div className="space-y-6">
       {/* URL input card */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <label className="text-sm font-medium text-zinc-200">
+      <Card className="rounded-3xl border-border/60 shadow-[var(--shadow-card)] p-6 md:p-7">
+        <label className="text-sm font-semibold text-foreground">
           Paste an X post or article URL
         </label>
-        <p className="mt-0.5 text-xs text-zinc-500">
-          Phantom will ingest the source, write a 5-beat reel script in your
+        <p className="mt-1 text-xs text-muted-foreground">
+          ReelForge will ingest the source, write a 5-beat reel script in your
           voice, generate avatar + B-roll, compose in HyperFrames, and render
           at 1080×1920.
         </p>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-4 flex gap-2">
           <div className="relative flex-1">
-            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input
               type="url"
               placeholder="https://x.com/... or https://example.com/article"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               disabled={running}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 pl-9 pr-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/40 disabled:opacity-50"
+              className="w-full rounded-full border border-border/60 bg-background pl-10 pr-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand/40 disabled:opacity-50"
             />
           </div>
-          <button
+          <Button
             onClick={() => runFromUrl()}
             disabled={running || !url.trim()}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap",
-              running || !url.trim()
-                ? "bg-zinc-800 text-zinc-500"
-                : "bg-cyan-500 text-zinc-950 hover:bg-cyan-400"
-            )}
+            className="rounded-full h-11 px-5 bg-foreground text-background hover:bg-foreground/90"
           >
             {running ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
                 Running…
               </>
             ) : (
               <>
-                <Play className="h-4 w-4 fill-current" />
+                <Play className="size-4 fill-current" />
                 Run
               </>
             )}
-          </button>
+          </Button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-zinc-500">
-            quick try:
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Quick try:
           </span>
           {PRESET_URLS.map((p) => (
             <button
@@ -161,33 +157,33 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
                 runFromUrl(p.url);
               }}
               disabled={running}
-              className="text-xs text-cyan-300 hover:text-cyan-200 disabled:opacity-50"
+              className="text-xs px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/70 transition disabled:opacity-50"
             >
               {p.label}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* Timeline */}
       {steps.length > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-          <div className="border-b border-zinc-800 px-5 py-3 text-xs uppercase tracking-wider text-zinc-500">
+        <Card className="rounded-3xl border-border/60 shadow-[var(--shadow-card)] overflow-hidden">
+          <div className="border-b border-border/60 bg-secondary/40 px-6 py-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             Reel pipeline
           </div>
-          <div className="divide-y divide-zinc-800/60">
+          <div className="divide-y divide-border/60">
             {steps.map((s, i) => (
               <StepRow key={s.step + i} step={s} index={i + 1} />
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Final reel embed */}
       {displayVideo && (
-        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-cyan-300 mb-3">
-            <CheckCircle2 className="h-4 w-4" />
+        <Card className="rounded-3xl border-foreground/30 shadow-[var(--shadow-glow)] p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-brand mb-4">
+            <CheckCircle2 className="size-4" />
             Reel rendered
           </div>
           <div className="flex justify-center">
@@ -196,26 +192,26 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
               controls
               autoPlay
               loop
-              className="rounded-lg ring-1 ring-zinc-800"
+              className="rounded-2xl ring-1 ring-border/60"
               style={{ maxHeight: "70vh", aspectRatio: "9 / 16" }}
             />
           </div>
           {!videoUrl && defaultDemoVideo && (
-            <div className="mt-3 text-xs text-zinc-500 text-center">
-              Live render takes 5-10 minutes; showing this morning's pre-rendered
+            <div className="mt-3 text-xs text-muted-foreground text-center">
+              Live render takes 5-10 minutes; showing this morning&apos;s pre-rendered
               artifact from the same pipeline.
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {failed && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-red-300">
-            <AlertTriangle className="h-4 w-4" />
+        <Card className="rounded-3xl border-destructive/30 bg-destructive/[0.06] p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <AlertTriangle className="size-4" />
             Reel pipeline failed. Check server logs.
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -223,17 +219,17 @@ export function ReelFromUrlPanel({ defaultDemoVideo }: { defaultDemoVideo?: stri
 
 function StepRow({ step, index }: { step: StepCard; index: number }) {
   return (
-    <div className="px-5 py-3.5">
+    <div className="px-6 py-4">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-mono">
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-mono">
           {step.status === "done" ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            <CheckCircle2 className="size-5 text-emerald-600" />
           ) : step.status === "failed" ? (
-            <AlertTriangle className="h-5 w-5 text-red-400" />
+            <AlertTriangle className="size-5 text-destructive" />
           ) : step.status === "running" ? (
-            <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+            <Loader2 className="size-4 animate-spin text-brand" />
           ) : (
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-zinc-500">
+            <span className="flex size-5 items-center justify-center rounded-full border border-border text-muted-foreground">
               {index}
             </span>
           )}
@@ -242,25 +238,25 @@ function StepRow({ step, index }: { step: StepCard; index: number }) {
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                "rounded px-1.5 py-0.5 text-[10px] font-mono",
+                "rounded-md px-1.5 py-0.5 text-[10px] font-mono font-semibold",
                 step.status === "done"
-                  ? "bg-emerald-400/10 text-emerald-300"
+                  ? "bg-emerald-500/15 text-emerald-700"
                   : step.status === "running"
-                  ? "bg-cyan-400/10 text-cyan-300"
+                  ? "bg-hero text-white"
                   : step.status === "failed"
-                  ? "bg-red-400/10 text-red-300"
-                  : "bg-zinc-800 text-zinc-500"
+                  ? "bg-destructive/15 text-destructive"
+                  : "bg-secondary text-muted-foreground"
               )}
             >
               {step.tool}
             </span>
-            <span className="text-sm text-zinc-200">{step.label}</span>
+            <span className="text-sm font-medium text-foreground">{step.label}</span>
           </div>
           {step.detail && (
-            <div className="mt-1 text-xs text-zinc-500">{step.detail}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{step.detail}</div>
           )}
           {step.output && (step.status === "done" || step.status === "failed") && (
-            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-md bg-zinc-950/60 px-3 py-2 font-mono text-[11px] text-zinc-400 ring-1 ring-zinc-800">
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl border border-border/60 bg-foreground/[0.025] px-3 py-2 font-mono text-[11px] text-muted-foreground">
               {step.output}
             </pre>
           )}

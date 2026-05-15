@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,23 +13,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Phantom — the autonomous creator",
+  title: "ReelForge — Turn X posts & news into viral YouTube reels",
   description:
-    "Phantom is an autonomous agent that runs your YouTube channel. It picks topics, drafts scripts, renders avatar videos with HeyGen, and learns from PostHog analytics what works.",
+    "Paste any X post or news article and instantly generate a perfect, viral YouTube Shorts script with hook, scenes, captions and music cues.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
     >
-      <body className="min-h-full bg-background text-foreground bg-ambient">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 min-w-0">{children}</main>
-        </div>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

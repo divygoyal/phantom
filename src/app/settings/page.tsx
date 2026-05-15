@@ -1,4 +1,7 @@
 import { CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { SiteNav } from "@/components/site-nav";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 
 export default function SettingsPage() {
   const integrations: Array<{
@@ -55,44 +58,45 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl px-8 py-10">
-      <header className="mb-8">
-        <div className="text-xs font-medium uppercase tracking-wider text-cyan-300">
-          Configuration
-        </div>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-50">
-          Settings
-        </h1>
-        <p className="mt-2 max-w-2xl text-zinc-400">
-          Phantom is local-only by default. Drop API keys into{" "}
-          <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-            .env.local
-          </code>{" "}
-          to switch any integration from scripted to live.
-        </p>
-      </header>
+    <div className="min-h-screen bg-background text-foreground">
+      <SiteNav />
+      <main className="mx-auto max-w-4xl px-6 py-12">
+        <header className="mb-10">
+          <Badge variant="outline" className="rounded-full">Configuration</Badge>
+          <h1 className="mt-4 text-4xl md:text-5xl font-semibold tracking-tight">
+            Settings
+          </h1>
+          <p className="mt-3 max-w-2xl text-muted-foreground">
+            ReelForge is local-only by default. Drop API keys into{" "}
+            <code className="rounded-md bg-secondary px-1.5 py-0.5 font-mono text-xs">
+              .env.local
+            </code>{" "}
+            to switch any integration from scripted to live.
+          </p>
+        </header>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-500">
-          Channel
-        </h2>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <Row label="Handle" value={process.env.CHANNEL_HANDLE ?? "@aisimplified"} mono />
-          <Row label="Avatar look ID" value={process.env.HEYGEN_AVATAR_LOOK_ID ?? "—"} mono />
-          <Row label="Voice ID" value={process.env.HEYGEN_VOICE_ID ?? "—"} mono />
-        </div>
-      </section>
+        <section className="mb-10">
+          <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Channel
+          </h2>
+          <Card className="rounded-3xl border-border/60 shadow-[var(--shadow-card)] p-6">
+            <Row label="Handle" value={process.env.CHANNEL_HANDLE ?? "@aisimplified"} mono />
+            <Row label="Avatar look ID" value={process.env.HEYGEN_AVATAR_LOOK_ID ?? "—"} mono />
+            <Row label="Voice ID" value={process.env.HEYGEN_VOICE_ID ?? "—"} mono />
+          </Card>
+        </section>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-500">
-          Integrations
-        </h2>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 divide-y divide-zinc-800/60">
-          {integrations.map((i) => (
-            <IntegrationRow key={i.name} {...i} />
-          ))}
-        </div>
-      </section>
+        <section>
+          <h2 className="mb-4 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Integrations
+          </h2>
+          <Card className="rounded-3xl border-border/60 shadow-[var(--shadow-card)] divide-y divide-border/60 overflow-hidden">
+            {integrations.map((i) => (
+              <IntegrationRow key={i.name} {...i} />
+            ))}
+          </Card>
+        </section>
+      </main>
     </div>
   );
 }
@@ -107,10 +111,10 @@ function Row({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
-      <span className="text-sm text-zinc-400">{label}</span>
+    <div className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
       <span
-        className={`text-sm text-zinc-200 ${
+        className={`text-sm text-foreground ${
           mono ? "font-mono text-xs" : ""
         }`}
       >
@@ -137,37 +141,37 @@ function IntegrationRow({
     ok: {
       Icon: CheckCircle2,
       text: "Live",
-      cls: "text-emerald-400 bg-emerald-500/10",
+      cls: "text-emerald-700 bg-emerald-500/10 ring-emerald-500/20",
     },
     missing: {
       Icon: XCircle,
       text: "Not configured",
-      cls: "text-red-400 bg-red-500/10",
+      cls: "text-destructive bg-destructive/10 ring-destructive/20",
     },
     scripted: {
       Icon: AlertCircle,
       text: "Scripted (demo-safe)",
-      cls: "text-amber-400 bg-amber-500/10",
+      cls: "text-amber-700 bg-amber-500/10 ring-amber-500/30",
     },
   };
   const s = statusConfig[status];
   return (
-    <div className="p-5">
+    <div className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
-            <span className="text-sm font-medium text-zinc-100">{name}</span>
-            <span className="font-mono text-[10px] text-zinc-500">
+            <span className="text-sm font-semibold text-foreground">{name}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">
               {envKey}
             </span>
           </div>
-          <div className="mt-0.5 text-xs text-zinc-400">{label}</div>
-          <div className="mt-2 text-xs text-zinc-500">{note}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
+          <div className="mt-2 text-xs text-muted-foreground">{note}</div>
         </div>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.cls}`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ${s.cls}`}
         >
-          <s.Icon className="h-3 w-3" />
+          <s.Icon className="size-3" />
           {s.text}
         </span>
       </div>

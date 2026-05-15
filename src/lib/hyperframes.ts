@@ -9,15 +9,16 @@ export type Beat = {
   durationSec: number;
   visualHint: string;
   captionText: string;
-  brollUrl: string; // absolute or composition-relative URL
+  brollUrl: string;
 };
 
 export type CompositionInput = {
   slug: string;
   beats: Beat[];
-  avatarVideoUrl: string; // single full-script avatar video
-  hookText: string; // big overlay text for B1 (3s)
-  channelHandle: string; // e.g. "@aisimplified"
+  avatarVideoUrl: string;       // mp4 with audio (and the green background)
+  avatarAlphaUrl?: string;      // optional transparent webm (chroma-keyed) — preferred for overlay
+  hookText: string;
+  channelHandle: string;
   fps?: number;
 };
 
@@ -44,7 +45,6 @@ export async function renderComposition(slug: string): Promise<string> {
   const outFile = path.join(outDir, "final.mp4");
 
   return new Promise<string>((resolve, reject) => {
-    // Build as a single shell command so paths with spaces survive the shell
     const cmd = `npx --yes hyperframes render --output "${outFile}" --quality standard --fps 30`;
     const proc = spawn(cmd, [], {
       cwd: COMP_ROOT,
@@ -67,22 +67,20 @@ export async function renderComposition(slug: string): Promise<string> {
 }
 
 function buildHtml(input: CompositionInput): string {
-  const fps = input.fps ?? 30;
   const total = input.beats.reduce((s, b) => s + b.durationSec, 0);
   const HOOK_DURATION = Math.min(3, input.beats[0]?.durationSec ?? 3);
-  const OUTRO_DURATION = 1;
+  const OUTRO_DURATION = 1.2;
 
-  // Compute beat start offsets
   let cursor = 0;
   const beats = input.beats.map((b) => {
     const start = cursor;
     cursor += b.durationSec;
     return { ...b, start };
   });
-
   const outroStart = Math.max(0, total - OUTRO_DURATION);
 
-  // === HTML ===
+  const avatarVisualSrc = input.avatarAlphaUrl ?? input.avatarVideoUrl;
+  const avatarVisualIsWebm = avatarVisualSrc.toLowerCase().endsWith(".webm");
 
   return `<!doctype html>
 <html lang="en">
@@ -90,140 +88,175 @@ function buildHtml(input: CompositionInput): string {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1080, height=1920" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
-        margin: 0;
         width: 1080px;
         height: 1920px;
         overflow: hidden;
-        background: #000;
-        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+        background: #0a0a0a;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       }
-      #root { position: relative; width: 1080px; height: 1920px; background: #000; }
-
-      /* === ASSET ZONE (top 60%) === */
-      .asset-zone {
-        position: absolute;
-        left: 0; top: 0;
-        width: 1080px; height: 1152px;
-        overflow: hidden;
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
         background: #0a0a0a;
       }
+
+      /* === FULL-SCREEN B-ROLL BACKGROUND === */
       .broll {
         position: absolute;
         inset: 0;
-        width: 100%; height: 100%;
+        width: 1080px; height: 1920px;
         object-fit: cover;
         opacity: 0;
+        z-index: 1;
       }
+      .broll-tint {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg,
+          rgba(0,0,0,0) 0%,
+          rgba(0,0,0,0.10) 40%,
+          rgba(0,0,0,0.55) 80%,
+          rgba(0,0,0,0.85) 100%);
+        z-index: 4;
+        pointer-events: none;
+      }
+
+      /* === BEAT TAG (top left, persistent) === */
+      .beat-tag {
+        position: absolute;
+        top: 50px; left: 50px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 18px;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 999px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 22px;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        opacity: 0;
+        z-index: 15;
+      }
+      .beat-tag-dot {
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        background: #22d3ee;
+        box-shadow: 0 0 16px rgba(34, 211, 238, 0.8);
+      }
+
+      /* === CAPTIONS (middle-upper area, big and bold) === */
       .caption-band {
         position: absolute;
         left: 60px; right: 60px;
-        bottom: 80px;
-        font-size: 78px;
-        line-height: 1.06;
-        font-weight: 800;
-        letter-spacing: -0.01em;
+        top: 760px;
+        font-size: 92px;
+        line-height: 1.04;
+        font-weight: 900;
+        letter-spacing: -0.03em;
         color: #ffffff;
-        text-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 1px rgba(0,0,0,0.9);
-        background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
-        padding: 24px 28px;
-        border-radius: 12px;
+        text-align: left;
+        text-shadow:
+          0 6px 32px rgba(0,0,0,0.85),
+          0 0 1px rgba(0,0,0,0.95);
         opacity: 0;
+        z-index: 10;
       }
 
-      /* === AVATAR ZONE (bottom 40%) === */
-      .avatar-zone {
-        position: absolute;
-        left: 0; top: 1152px;
-        width: 1080px; height: 768px;
-        overflow: hidden;
-        background: #000;
-      }
+      /* === AVATAR (transparent webm overlay) === */
       .avatar-video {
         position: absolute;
-        inset: 0;
-        width: 100%; height: 100%;
-        object-fit: cover;
+        left: 0;
+        bottom: 0;
+        width: 1080px;
+        height: 1920px; /* preserves the avatar's framing — it was rendered at 1080x1920 with avatar at bottom */
+        object-fit: contain;
         object-position: center bottom;
-      }
-      /* subtle fade where asset meets avatar */
-      .seam-fade {
-        position: absolute;
-        left: 0; right: 0; top: -40px;
-        height: 80px;
-        background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.6));
+        z-index: 6;
         pointer-events: none;
-        z-index: 5;
       }
 
-      /* === HOOK OVERLAY (B1 only) === */
+      /* === HOOK OVERLAY (B1 takeover) === */
       .hook-overlay {
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.85) 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 80px 60px;
-        opacity: 0;
-        z-index: 20;
-      }
-      .hook-text {
-        font-size: 120px;
-        line-height: 1.02;
-        font-weight: 900;
-        letter-spacing: -0.025em;
-        color: #ffffff;
-        text-align: center;
-        text-shadow: 0 8px 40px rgba(0,0,0,0.7);
-      }
-      .hook-accent {
-        color: #22d3ee;
-      }
-
-      /* === OUTRO CARD === */
-      .outro {
-        position: absolute;
-        left: 0; right: 0; bottom: 0;
-        height: 280px;
-        background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.6) 70%, transparent);
+        background:
+          radial-gradient(circle at center, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.78) 100%);
+        backdrop-filter: blur(6px);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 12px;
+        padding: 0 80px;
         opacity: 0;
-        z-index: 25;
+        z-index: 20;
       }
-      .outro-handle {
-        font-size: 64px;
-        font-weight: 800;
-        color: #22d3ee;
-        letter-spacing: -0.01em;
-      }
-      .outro-cta {
-        font-size: 32px;
-        color: #ffffff;
+      .hook-prefix {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 22px;
         font-weight: 600;
-        opacity: 0.85;
+        color: #22d3ee;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+        margin-bottom: 36px;
+      }
+      .hook-text {
+        font-size: 130px;
+        line-height: 0.96;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        color: #ffffff;
+        text-align: center;
+        text-shadow: 0 10px 60px rgba(0,0,0,0.7);
       }
 
-      /* === BEAT-INDEX BADGE (small, top-left) === */
-      .beat-badge {
+      /* === OUTRO === */
+      .outro {
         position: absolute;
-        top: 36px; left: 36px;
-        background: rgba(0,0,0,0.5);
-        backdrop-filter: blur(6px);
-        padding: 8px 16px;
-        border-radius: 999px;
-        font-size: 22px;
-        color: #ffffff;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        z-index: 15;
+        inset: 0;
+        background:
+          linear-gradient(180deg, #0f172a 0%, #020617 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
         opacity: 0;
+        z-index: 35;
+      }
+      .outro-glow {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 900px; height: 900px;
+        background: radial-gradient(circle, rgba(34, 211, 238, 0.22) 0%, transparent 60%);
+        pointer-events: none;
+      }
+      .outro-handle {
+        font-size: 96px;
+        font-weight: 900;
+        color: #22d3ee;
+        letter-spacing: -0.03em;
+        text-shadow: 0 0 80px rgba(34, 211, 238, 0.5);
+        position: relative;
+        z-index: 2;
+      }
+      .outro-cta {
+        font-size: 36px;
+        font-weight: 600;
+        color: #cbd5e1;
+        letter-spacing: 0.04em;
+        position: relative;
+        z-index: 2;
       }
     </style>
   </head>
@@ -236,30 +269,25 @@ function buildHtml(input: CompositionInput): string {
       data-width="1080"
       data-height="1920"
     >
-      <!-- ASSET ZONE -->
-      <div class="asset-zone">
-        ${beats.map((b) => `<img id="broll-${b.index}" class="broll clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="0" src="${escapeAttr(b.brollUrl)}" alt="b-roll ${b.index}" />`).join("\n        ")}
+      <!-- FULL-SCREEN B-ROLL per beat -->
+      ${beats.map((b) => `<img id="broll-${b.index}" class="broll clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="0" src="${escapeAttr(b.brollUrl)}" alt="b-roll ${b.index}" />`).join("\n      ")}
 
-        ${beats.map((b) => `<div id="caption-${b.index}" class="caption-band clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="1">${escapeHtml(b.captionText)}</div>`).join("\n        ")}
+      <!-- Soft tint at the bottom so captions read against any b-roll -->
+      <div class="broll-tint"></div>
 
-        ${beats.map((b) => `<div id="badge-${b.index}" class="beat-badge clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="2">${b.index} · ${beats.length}</div>`).join("\n        ")}
-      </div>
+      <!-- AVATAR (transparent webm, full-frame, native position from template) -->
+      <video
+        id="avatar"
+        class="avatar-video clip"
+        muted
+        ${avatarVisualIsWebm ? "" : "playsinline"}
+        data-start="0"
+        data-duration="${total.toFixed(2)}"
+        data-track-index="3"
+        src="${escapeAttr(avatarVisualSrc)}"
+      ></video>
 
-      <!-- AVATAR ZONE -->
-      <div class="avatar-zone">
-        <div class="seam-fade"></div>
-        <video
-          id="avatar"
-          class="avatar-video clip"
-          muted
-          data-start="0"
-          data-duration="${total.toFixed(2)}"
-          data-track-index="3"
-          src="${escapeAttr(input.avatarVideoUrl)}"
-        ></video>
-      </div>
-
-      <!-- Avatar audio (separate per HyperFrames rule) -->
+      <!-- AUDIO: original mp4 (always has voice) -->
       <audio
         id="avatar-audio"
         class="clip"
@@ -269,6 +297,12 @@ function buildHtml(input: CompositionInput): string {
         src="${escapeAttr(input.avatarVideoUrl)}"
       ></audio>
 
+      <!-- BEAT TAGS -->
+      ${beats.map((b) => `<div id="tag-${b.index}" class="beat-tag clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="2"><span class="beat-tag-dot"></span>beat ${b.index} of ${beats.length}</div>`).join("\n      ")}
+
+      <!-- CAPTIONS -->
+      ${beats.map((b) => `<div id="caption-${b.index}" class="caption-band clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="1">${escapeHtml(b.captionText)}</div>`).join("\n      ")}
+
       <!-- HOOK OVERLAY -->
       <div
         id="hook"
@@ -277,6 +311,7 @@ function buildHtml(input: CompositionInput): string {
         data-duration="${HOOK_DURATION.toFixed(2)}"
         data-track-index="6"
       >
+        <div class="hook-prefix">phantom · agent live</div>
         <div class="hook-text">${escapeHtml(input.hookText)}</div>
       </div>
 
@@ -288,6 +323,7 @@ function buildHtml(input: CompositionInput): string {
         data-duration="${OUTRO_DURATION.toFixed(2)}"
         data-track-index="7"
       >
+        <div class="outro-glow"></div>
         <div class="outro-handle">${escapeHtml(input.channelHandle)}</div>
         <div class="outro-cta">subscribe for more</div>
       </div>
@@ -295,20 +331,29 @@ function buildHtml(input: CompositionInput): string {
 
     <script>
       window.__timelines = window.__timelines || {};
-      const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+      const tl = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
 
-      // Per-beat: B-roll fades in over 0.3s, caption slides up + fades in over 0.4s after a 0.2s delay
+      // Hook
+      tl.fromTo("#hook", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 0);
+      tl.fromTo(".hook-prefix", { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55 }, 0.15);
+      tl.fromTo(".hook-text", { scale: 0.93, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7 }, 0.28);
+      tl.to("#hook", { opacity: 0, duration: 0.55 }, ${(HOOK_DURATION - 0.55).toFixed(2)});
+      tl.set("#hook", { opacity: 0 }, ${HOOK_DURATION.toFixed(2)});
+
       ${beats.map((b) => `
-      tl.to("#broll-${b.index}", { opacity: 1, duration: 0.3 }, ${b.start.toFixed(2)});
-      tl.fromTo("#caption-${b.index}", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, ${(b.start + 0.2).toFixed(2)});
-      tl.to("#badge-${b.index}", { opacity: 1, duration: 0.3 }, ${b.start.toFixed(2)});`).join("")}
+      // Beat ${b.index}: b-roll fade in, tag + caption slide up
+      tl.to("#broll-${b.index}", { opacity: 1, duration: 0.4 }, ${b.start.toFixed(2)});
+      tl.fromTo("#tag-${b.index}", { x: -20, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4 }, ${b.start.toFixed(2)});
+      tl.fromTo("#caption-${b.index}", { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, ${(b.start + 0.15).toFixed(2)});
+      // Exits
+      tl.to("#broll-${b.index}", { opacity: 0, duration: 0.35 }, ${(b.start + b.durationSec - 0.35).toFixed(2)});
+      tl.to("#caption-${b.index}", { opacity: 0, y: -14, duration: 0.3 }, ${(b.start + b.durationSec - 0.3).toFixed(2)});
+      tl.to("#tag-${b.index}", { opacity: 0, x: -10, duration: 0.3 }, ${(b.start + b.durationSec - 0.3).toFixed(2)});`).join("")}
 
-      // Hook overlay: fade in instantly at 0, fade out at ${HOOK_DURATION.toFixed(2)}s
-      tl.to("#hook", { opacity: 1, duration: 0.2 }, 0);
-      tl.to("#hook", { opacity: 0, duration: 0.5 }, ${(HOOK_DURATION - 0.5).toFixed(2)});
-
-      // Outro: fade in at outroStart
-      tl.to("#outro", { opacity: 1, duration: 0.4 }, ${outroStart.toFixed(2)});
+      // Outro
+      tl.fromTo("#outro", { opacity: 0 }, { opacity: 1, duration: 0.5 }, ${outroStart.toFixed(2)});
+      tl.fromTo(".outro-handle", { scale: 0.94, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.65, ease: "back.out(1.6)" }, ${(outroStart + 0.1).toFixed(2)});
+      tl.fromTo(".outro-cta", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, ${(outroStart + 0.4).toFixed(2)});
 
       window.__timelines["main"] = tl;
     </script>

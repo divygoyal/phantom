@@ -8,6 +8,7 @@ import { createAvatarVideo, HEYGEN_DEFAULTS, heygenStatus } from "./heygen";
 import { writeComposition, renderComposition, type Beat } from "./hyperframes";
 import { captureEvent } from "./posthog";
 import { db } from "./db";
+import { ensureChromaWebm } from "./video";
 
 export type ReelEvent = {
   id: string;
@@ -159,6 +160,25 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
     slug
   );
 
+  // Chroma-key the green background into a transparent WebM (v67-style cutout).
+  // The mp4 keeps the audio; the webm has the transparent video.
+  let avatarAlphaSrc: string | undefined;
+  if (!avatarSrc.startsWith("http")) {
+    const compRoot = path.resolve(
+      process.cwd(),
+      process.cwd().endsWith("phantom") ? "composition" : "phantom/composition"
+    );
+    const mp4Abs = path.join(compRoot, avatarSrc);
+    const webmAbs = mp4Abs.replace(/\.mp4$/i, ".webm");
+    try {
+      await ensureChromaWebm(mp4Abs, webmAbs);
+      avatarAlphaSrc = `assets/${path.basename(webmAbs)}`;
+    } catch (err) {
+      // Non-fatal — composition will fall back to non-keyed mp4
+      console.error("chroma-key failed:", err);
+    }
+  }
+
   // Bind beat-by-beat
   const compositionBeats: Beat[] = beats.map((b, i) => ({
     index: i + 1,
@@ -173,6 +193,7 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
     slug,
     beats: compositionBeats,
     avatarVideoUrl: avatarSrc,
+    avatarAlphaUrl: avatarAlphaSrc,
     hookText: deriveHookText(compositionBeats[0].voiceover),
     channelHandle: CHANNEL_HANDLE,
   });

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Play, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 type StreamEvent = {
   id: string;
@@ -111,76 +113,71 @@ export function LiveRunPanel() {
   return (
     <div className="space-y-6">
       {/* Control card */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <div className="flex items-center justify-between">
+      <Card className="rounded-3xl border-border/60 shadow-[var(--shadow-card)] p-6">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-sm font-medium text-zinc-200">Daily run</div>
-            <div className="mt-0.5 text-xs text-zinc-500">
+            <div className="text-sm font-semibold text-foreground">Daily run</div>
+            <div className="mt-1 text-xs text-muted-foreground">
               The agent will execute {PLAN.length} steps using Claude, HeyGen,
               Fal, and PostHog.
             </div>
           </div>
-          <button
+          <Button
             onClick={runDemo}
             disabled={running}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
-              running
-                ? "bg-zinc-800 text-zinc-500"
-                : "bg-cyan-500 text-zinc-950 hover:bg-cyan-400"
-            )}
+            className="rounded-full h-11 px-5 bg-foreground text-background hover:bg-foreground/90"
           >
             {running ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
                 Running…
               </>
             ) : (
               <>
-                <Play className="h-4 w-4 fill-current" />
+                <Play className="size-4 fill-current" />
                 Run Agent Now
               </>
             )}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {/* Timeline */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
-        <div className="border-b border-zinc-800 px-5 py-3 text-xs uppercase tracking-wider text-zinc-500">
+      <Card className="rounded-3xl border-border/60 shadow-[var(--shadow-card)] overflow-hidden">
+        <div className="border-b border-border/60 bg-secondary/40 px-6 py-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           Reasoning timeline
         </div>
-        <div className="divide-y divide-zinc-800/60">
+        <div className="divide-y divide-border/60">
           {steps.map((s, i) => (
             <StepRow key={s.step + i} step={s} index={i + 1} />
           ))}
         </div>
-      </div>
+      </Card>
 
       {done && !failed && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-emerald-300">
-            <CheckCircle2 className="h-4 w-4" />
+        <Card className="rounded-3xl border-emerald-500/30 bg-emerald-500/[0.06] p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+            <CheckCircle2 className="size-4" />
             Run complete — video rendered, translated, and queued for publish.
           </div>
-          <div className="mt-2 text-xs text-emerald-200/80">
+          <div className="mt-2 text-xs text-emerald-700/80">
             The agent will read tomorrow&apos;s PostHog data and rewrite the
             prompt template again. View the diff in{" "}
-            <a href="/prompts" className="underline">
+            <a href="/prompts" className="underline underline-offset-4">
               Prompts
             </a>
             .
           </div>
-        </div>
+        </Card>
       )}
 
       {failed && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-5">
-          <div className="flex items-center gap-2 text-sm font-medium text-red-300">
-            <AlertTriangle className="h-4 w-4" />
+        <Card className="rounded-3xl border-destructive/30 bg-destructive/[0.06] p-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+            <AlertTriangle className="size-4" />
             Agent run failed — check the server logs.
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -188,17 +185,17 @@ export function LiveRunPanel() {
 
 function StepRow({ step, index }: { step: StepCard; index: number }) {
   return (
-    <div className="px-5 py-3.5">
+    <div className="px-6 py-4">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-mono">
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-mono">
           {step.status === "done" ? (
-            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            <CheckCircle2 className="size-5 text-emerald-600" />
           ) : step.status === "failed" ? (
-            <AlertTriangle className="h-5 w-5 text-red-400" />
+            <AlertTriangle className="size-5 text-destructive" />
           ) : step.status === "running" ? (
-            <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+            <Loader2 className="size-4 animate-spin text-brand" />
           ) : (
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-700 text-zinc-500">
+            <span className="flex size-5 items-center justify-center rounded-full border border-border text-muted-foreground">
               {index}
             </span>
           )}
@@ -207,14 +204,14 @@ function StepRow({ step, index }: { step: StepCard; index: number }) {
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                "rounded px-1.5 py-0.5 text-[10px] font-mono",
+                "rounded-md px-1.5 py-0.5 text-[10px] font-mono font-semibold",
                 step.status === "done"
-                  ? "bg-emerald-400/10 text-emerald-300"
+                  ? "bg-emerald-500/15 text-emerald-700"
                   : step.status === "running"
-                  ? "bg-cyan-400/10 text-cyan-300"
+                  ? "bg-hero text-white"
                   : step.status === "failed"
-                  ? "bg-red-400/10 text-red-300"
-                  : "bg-zinc-800 text-zinc-500"
+                  ? "bg-destructive/15 text-destructive"
+                  : "bg-secondary text-muted-foreground"
               )}
             >
               {step.tool}
@@ -222,17 +219,19 @@ function StepRow({ step, index }: { step: StepCard; index: number }) {
             <span
               className={cn(
                 "text-sm",
-                step.status === "pending" ? "text-zinc-500" : "text-zinc-200"
+                step.status === "pending"
+                  ? "text-muted-foreground"
+                  : "text-foreground font-medium"
               )}
             >
               {step.label}
             </span>
           </div>
           {step.detail && (
-            <div className="mt-1 text-xs text-zinc-500">{step.detail}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{step.detail}</div>
           )}
           {step.output && (step.status === "done" || step.status === "failed") && (
-            <pre className="mt-2 overflow-x-auto rounded-md bg-zinc-950/60 px-3 py-2 font-mono text-[11px] text-zinc-400 ring-1 ring-zinc-800">
+            <pre className="mt-2 overflow-x-auto rounded-xl border border-border/60 bg-foreground/[0.025] px-3 py-2 font-mono text-[11px] text-muted-foreground">
               {step.output}
             </pre>
           )}
