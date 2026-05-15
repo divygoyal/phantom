@@ -158,4 +158,4 @@ These are real but acceptable for the clone-and-run / hackathon use case.
 
 ## License + credits
 
-Built by [@aisimplified](https://youtube.com/@aisimplified) for the HeyGen Hackathon. The `reel-production` skill is the editorial brain — years of iteration compressed into rubrics + critique loops.
+Built by [@devdivygoyal](https://x.com/devdivygoyal) for the HeyGen Hackathon. The `reel-production` skill is the editorial brain — years of iteration compressed into rubrics + critique loops.
