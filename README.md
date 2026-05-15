@@ -38,7 +38,7 @@ Phantom is a **single-feature product**: paste an X post or news article URL, ge
 
 That's the entire surface area. No editing UI. No timeline scrubber. No "let me suggest a caption" copilot. You hand it a link, it hands you back an mp4 ready to drop into Instagram Reels, TikTok, or YouTube Shorts.
 
-Under the hood it's an autonomous AI agent: it reads the source, picks a hook archetype, drafts a 9-beat script in [@aisimplified](https://www.youtube.com/@aisimplified)'s editorial voice, renders an avatar speaking that script, generates B-roll per beat, composes the layout, burns word-pinned captions, mobile-encodes, and stages the file. End to end, a run is **15–30 minutes**.
+Under the hood it's an autonomous AI agent: it reads the source, picks a hook archetype, drafts a 9-beat script in [@AISimplifiedu](https://www.youtube.com/@AISimplifiedu)'s editorial voice, renders an avatar speaking that script, generates B-roll per beat, composes the layout, burns word-pinned captions, mobile-encodes, and stages the file. End to end, a run is **15–30 minutes**.
 
 The agent has **zero hardcoded editorial**. Two URLs produce two genuinely different reels — different tones, different hook archetypes, different SFX, different visual rhythms — because every taste decision is made per URL by the underlying `reel-production` skill.
 
