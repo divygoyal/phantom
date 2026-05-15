@@ -48,7 +48,15 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
       "Running ALL phases (0 → 5) inside claude --print subprocess",
       "running"
     );
-    const skillSlug = `${url.split("/").slice(-1)[0]?.slice(0, 20) || "reel"}-${Date.now()}`;
+    // Strip every non-alphanumeric (path-safe on Windows, where ? : * etc. are
+    // illegal in filenames). The skill writes output/breaking/<slug>/ folders,
+    // which must mkdir cleanly.
+    const slugBase =
+      (url.split("/").slice(-1)[0] || "reel")
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")
+        .slice(0, 20) || "reel";
+    const skillSlug = `${slugBase}-${Date.now()}`;
     let finalVideoUrl: string | undefined;
     for await (const ev of runReelViaSkill(url, skillSlug)) {
       yield emit(ev.step, "reel-production-skill", ev.message, undefined, ev.status, ev.output);
