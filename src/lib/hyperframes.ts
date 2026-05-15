@@ -10,6 +10,7 @@ export type Beat = {
   visualHint: string;
   captionText: string;
   brollUrl: string;
+  brollIsVideo?: boolean; // when true, render <video> instead of <img>
 };
 
 export type CompositionInput = {
@@ -269,8 +270,11 @@ function buildHtml(input: CompositionInput): string {
       data-width="1080"
       data-height="1920"
     >
-      <!-- FULL-SCREEN B-ROLL per beat -->
-      ${beats.map((b) => `<img id="broll-${b.index}" class="broll clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="0" src="${escapeAttr(b.brollUrl)}" alt="b-roll ${b.index}" />`).join("\n      ")}
+      <!-- FULL-SCREEN B-ROLL per beat (image OR video clip from source) -->
+      ${beats.map((b) => b.brollIsVideo
+        ? `<video id="broll-${b.index}" class="broll clip" muted data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="0" src="${escapeAttr(b.brollUrl)}"></video>`
+        : `<img id="broll-${b.index}" class="broll clip" data-start="${b.start.toFixed(2)}" data-duration="${b.durationSec.toFixed(2)}" data-track-index="0" src="${escapeAttr(b.brollUrl)}" alt="b-roll ${b.index}" />`
+      ).join("\n      ")}
 
       <!-- Soft tint at the bottom so captions read against any b-roll -->
       <div class="broll-tint"></div>

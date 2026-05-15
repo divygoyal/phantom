@@ -2,13 +2,19 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { ingestUrl, slugify, TopicTooThinError, IngestedSource } from "./ingest";
-import { generate } from "./llm";
+import { generate, llmProvider, REEL_SCRIPT_SYSTEM, CRITIQUE_SYSTEM } from "./llm";
 import { generateImage, generateThumbnailVariants, imageGenStatus } from "./fal";
 import { createAvatarVideo, HEYGEN_DEFAULTS, heygenStatus } from "./heygen";
 import { writeComposition, renderComposition, type Beat } from "./hyperframes";
 import { captureEvent } from "./posthog";
 import { db } from "./db";
 import { ensureChromaWebm } from "./video";
+import {
+  downloadSourceVideo,
+  cutBeatClips,
+  pickSourceVideoUrl,
+  type BeatClip,
+} from "./source-video";
 
 export type ReelEvent = {
   id: string;
@@ -89,15 +95,49 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
     `tone:         ${plan.tone}\nintent:       ${plan.intent}\nhook_pattern: ${plan.hook_pattern}\nbeat_count:   ${plan.beat_count}`
   );
 
-  // === Phase C: Script ===
-  yield emit("script", "Claude", "Draft script", `${plan.beat_count}-beat structure · middle-ground register`, "running");
-  await sleep(1200);
+  // === Phase C: Script (with rubric-rich system + optional critique pass) ===
+  yield emit(
+    "script",
+    "Claude",
+    "Draft script",
+    `${plan.beat_count}-beat structure · middle-ground Varun register · ${llmProvider()} brain`,
+    "running"
+  );
+  await sleep(900);
 
-  const scriptText = await generate({
-    system: SCRIPT_SYSTEM,
-    prompt: `Source title: ${source.title}\n\nSource body:\n${source.body.slice(0, 1500)}\n\nTone: ${plan.tone}\nHook pattern: ${plan.hook_pattern}\nBeat count: ${plan.beat_count}\n\nDraft the script. Return ONLY the beat lines, one per line, no numbering.`,
+  const userPrompt = `Source title: ${source.title}
+Source body (truncated):
+${source.body.slice(0, 1500)}
+
+Tone: ${plan.tone}
+Hook pattern: ${plan.hook_pattern}
+Beat count: ${plan.beat_count}
+
+Draft the script following the register rules above. Return ONLY ${plan.beat_count} beat lines, one per line, no numbering.`;
+
+  let scriptText = await generate({
+    system: REEL_SCRIPT_SYSTEM,
+    prompt: userPrompt,
     maxTokens: 1200,
   });
+
+  // Phase 3: critique + single regen if real LLM is available.
+  // Scripted brain skips this (its output is hardcoded anyway).
+  if (llmProvider() !== "scripted") {
+    const critique = await generate({
+      system: CRITIQUE_SYSTEM,
+      prompt: `Critique this script:\n\n${scriptText}\n\nReturn PASS or FAIL with reasons.`,
+      maxTokens: 500,
+    });
+    if (/^FAIL/i.test(critique.trim())) {
+      // Regen once with critique feedback baked in
+      scriptText = await generate({
+        system: REEL_SCRIPT_SYSTEM,
+        prompt: `${userPrompt}\n\nThe previous draft failed critique:\n${critique}\n\nRewrite addressing each issue. Return ONLY the beat lines.`,
+        maxTokens: 1200,
+      });
+    }
+  }
 
   const beats = parseBeats(scriptText, plan.beat_count, source);
   yield emit(
@@ -109,18 +149,74 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
     `${beats.length} beats · ~${beats.reduce((s, b) => s + b.durationSec, 0).toFixed(1)}s total\n\n${beats.map((b, i) => `[B${i + 1}] ${truncate(b.voiceover, 72)}`).join("\n")}`
   );
 
-  // === Phase D: Asset gen (parallel: B-roll + avatar) ===
+  // === Phase 0.5: Source-video catalog (if X post has video) ===
+  const sourceVideoUrl = pickSourceVideoUrl(source.mediaUrls);
+  let beatClips: BeatClip[] | null = null;
+
+  if (sourceVideoUrl) {
+    yield emit(
+      "source-scan",
+      "Phantom",
+      "Source video catalog + cut",
+      "ffmpeg scan → per-beat clips at natural durations",
+      "running"
+    );
+    try {
+      const sourceVid = await downloadSourceVideo(sourceVideoUrl, slug);
+      beatClips = await cutBeatClips(
+        sourceVid,
+        beats.map((b, i) => ({ index: i + 1, durationSec: b.durationSec })),
+        slug
+      );
+      yield emit(
+        "source-scan",
+        "Phantom",
+        "Source video catalog + cut",
+        undefined,
+        "done",
+        `source: ${(sourceVid.durationSec).toFixed(1)}s\nclips: ${beatClips.length} cut\n${beatClips.map((c) => `  B${c.beatIndex}: t=${c.srcIn.toFixed(1)}-${c.srcOut.toFixed(1)}s (${c.durationSec.toFixed(1)}s)`).join("\n")}`
+      );
+    } catch (err) {
+      yield emit(
+        "source-scan",
+        "Phantom",
+        "Source video catalog failed (using Gemini fallback)",
+        undefined,
+        "failed",
+        String(err instanceof Error ? err.message : err)
+      );
+      beatClips = null;
+    }
+  }
+
+  // === Phase D: Asset gen (B-roll + avatar in parallel) ===
+  const brollSource = beatClips
+    ? `source-video clips (${beatClips.length})`
+    : `${imageGenStatus()} images`;
   yield emit(
     "assets",
     "Fal + HeyGen",
     "Generate assets in parallel",
-    `B-roll via ${imageGenStatus()} · avatar via HeyGen (${heygenStatus()})`,
+    `B-roll via ${brollSource} · avatar via HeyGen (${heygenStatus()})`,
     "running"
   );
 
-  // Run in parallel for speed
+  // B-roll: use source clips if we have them, else generate Gemini images
+  const brollImagesPromise = beatClips
+    ? Promise.resolve(
+        beatClips.map((c) => ({
+          url: c.compositionUrl,
+          width: 1080,
+          height: 1920,
+          provider: "source-video" as const,
+        }))
+      )
+    : Promise.all(
+        beats.map((b) => generateImage(b.visualHint, { width: 1080, height: 1280 }))
+      );
+
   const [brollImages, avatarVideo] = await Promise.all([
-    Promise.all(beats.map((b) => generateImage(b.visualHint, { width: 1080, height: 1280 }))),
+    brollImagesPromise,
     createAvatarVideo({
       script: beats.map((b) => b.voiceover).join("\n\n"),
       avatarLookId: HEYGEN_DEFAULTS.avatarLookId,
@@ -140,7 +236,7 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
     "Generate assets in parallel",
     undefined,
     "done",
-    `b-roll: ${brollImages.length} images via ${brollImages[0].provider}\navatar: ${avatarVideo.videoId} · status=${avatarVideo.status}`
+    `b-roll: ${brollImages.length} via ${brollImages[0]?.provider ?? "fallback"}\navatar: ${avatarVideo.videoId} · status=${avatarVideo.status}`
   );
 
   // === Phase E: Compose + render ===
@@ -187,6 +283,7 @@ export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
     visualHint: b.visualHint,
     captionText: b.captionText,
     brollUrl: brollImages[i].url,
+    brollIsVideo: !!beatClips,
   }));
 
   await writeComposition({
@@ -390,24 +487,8 @@ function pickPlan(source: IngestedSource): Plan {
   return { tone, intent, hook_pattern, beat_count };
 }
 
-const SCRIPT_SYSTEM = `You are scripting a vertical video for @aisimplified. The audience watches AI + product content. Tight, punchy, no fluff.
-
-Voice register: middle-ground Varun.
-- 12-18 words per beat
-- Light connectors allowed: "Then", "So", "Here's the thing —", "The catch is —"
-- Specifics retained: numbers, names, model versions, dollar amounts
-- Forbidden openers: "Hi", "Hey", "So today", "Welcome", "Let me tell you", "In this video"
-- Forbidden closers: "Tag 3 friends", "Follow for more", "Smash that like"
-- Use @aisimplified (never @yourchannel)
-
-Structure (5-beat default):
-  B1 (0-3s)    HOOK   — must promise the punch in <12 words
-  B2 (3-12s)   SETUP  — the wrong assumption / the context
-  B3 (12-25s)  PAYOFF — the actual insight / the reveal
-  B4 (25-38s)  PROOF  — a specific example / a number / a quote from the source
-  B5 (38-50s)  CALL   — what the viewer should think / save / do
-
-Output ONLY the beat lines, one per line, no numbering, no labels.`;
+// Note: SCRIPT_SYSTEM was inlined here for v1; v2 uses REEL_SCRIPT_SYSTEM
+// imported from ./llm which contains the full reel-production rubric port.
 
 function parseBeats(
   scriptText: string,

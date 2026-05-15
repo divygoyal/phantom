@@ -25,7 +25,7 @@ export type GeneratedImage = {
   url: string;
   width: number;
   height: number;
-  provider: "fal" | "gemini" | "scripted";
+  provider: "fal" | "gemini" | "scripted" | "source-video";
 };
 
 export async function generateImage(
