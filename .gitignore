@@ -30,8 +30,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — .env has only non-secret defaults (DATABASE_URL); secrets live in .env*.local
+.env.local
+.env.*.local
+
+# Prisma SQLite DB (generated; recreate with `npx prisma migrate dev`)
+prisma/*.db
+prisma/*.db-journal
+prisma/prisma/
 
 # vercel
 .vercel

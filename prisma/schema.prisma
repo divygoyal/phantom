@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Channel {
+  id            String   @id @default(cuid())
+  handle        String   @unique
+  displayName   String?
+  avatarUrl     String?
+  voiceId       String?
+  avatarGroupId String?
+  avatarLookId  String?
+  createdAt     DateTime @default(now())
+
+  videos          Video[]
+  promptTemplates PromptTemplate[]
+  runs            AgentRun[]
+}
+
+model Video {
+  id              String   @id @default(cuid())
+  channelId       String
+  channel         Channel  @relation(fields: [channelId], references: [id])
+  title           String
+  topic           String
+  hook            String
+  script          String
+  thumbnailUrl    String?
+  videoUrl        String?
+  heygenVideoId   String?
+  language        String   @default("en")
+  promptVersionId String?
+  promptVersion   PromptTemplate? @relation(fields: [promptVersionId], references: [id])
+  status          String   @default("pending") // pending, rendering, ready, published, failed
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  events          AnalyticsEvent[]
+}
+
+model PromptTemplate {
+  id               String   @id @default(cuid())
+  channelId        String
+  channel          Channel  @relation(fields: [channelId], references: [id])
+  version          Int
+  template         String   // the actual prompt text
+  reasoning        String   // why this version was created (agent's reasoning)
+  basedOnAnalytics String?  // JSON: PostHog data the agent used
+  active           Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  videos           Video[]
+
+  @@unique([channelId, version])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id])
+  eventType String   // view, click, watch_complete, like, comment
+  data      String?  // JSON
+  createdAt DateTime @default(now())
+}
+
+model AgentRun {
+  id            String   @id @default(cuid())
+  channelId     String
+  channel       Channel  @relation(fields: [channelId], references: [id])
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  status        String   @default("running") // running, completed, failed
+  steps         String   @default("[]") // JSON array of {step, tool, input, output, timestamp}
+  resultVideoId String?
+}
