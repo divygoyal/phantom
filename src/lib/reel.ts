@@ -15,6 +15,7 @@ import {
   pickSourceVideoUrl,
   type BeatClip,
 } from "./source-video";
+import { runReelViaSkill } from "./skill-runner";
 
 export type ReelEvent = {
   id: string;
@@ -36,7 +37,45 @@ function sleep(ms: number) {
 export async function* runReelFromUrl(url: string): AsyncGenerator<ReelEvent> {
   const startedAt = Date.now();
 
-  // === Phase A: Ingest ===
+  // ── BRANCH: full skill invocation OR inline TS pipeline ──
+  // RUN_VIA_SKILL=true delegates the entire reel to the reel-production skill
+  // via `claude --print`. 15-30 min latency, full skill quality.
+  if (process.env.RUN_VIA_SKILL === "true") {
+    yield emit(
+      "skill-mode",
+      "Phantom",
+      "Delegating to reel-production skill",
+      "Running ALL phases (0 → 5) inside claude --print subprocess",
+      "running"
+    );
+    const skillSlug = `${url.split("/").slice(-1)[0]?.slice(0, 20) || "reel"}-${Date.now()}`;
+    let finalVideoUrl: string | undefined;
+    for await (const ev of runReelViaSkill(url, skillSlug)) {
+      yield emit(ev.step, "reel-production-skill", ev.message, undefined, ev.status, ev.output);
+      if (ev.status === "done" && ev.step === "skill-collect" && ev.output) {
+        finalVideoUrl = `/reels/${skillSlug}/final.mp4`;
+      }
+    }
+    if (finalVideoUrl) {
+      yield {
+        id: crypto.randomUUID(),
+        step: "complete",
+        tool: "Phantom",
+        label: "Reel ready (via skill)",
+        status: "done",
+        output: finalVideoUrl,
+        data: { videoUrl: finalVideoUrl, slug: skillSlug },
+      };
+      await captureEvent("reel_generated_via_skill", {
+        source_url: url,
+        slug: skillSlug,
+        elapsed_ms: Date.now() - startedAt,
+      });
+    }
+    return;
+  }
+
+  // === Phase A: Ingest (inline TS pipeline path) ===
   yield emit("ingest", "Phantom", "Ingest URL", `Reading ${truncateUrl(url)}`, "running");
 
   let source: IngestedSource;
