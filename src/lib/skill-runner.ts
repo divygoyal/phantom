@@ -32,6 +32,8 @@ const HEYGEN_AVATAR_LOOK_ID =
   process.env.HEYGEN_AVATAR_LOOK_ID || "e21e5186b877473380cfd62b73930204";
 const HEYGEN_VOICE_ID =
   process.env.HEYGEN_VOICE_ID || "1856084cf0ee4e139de4bbb02035a02c";
+const HEYGEN_TEMPLATE_ID =
+  process.env.HEYGEN_TEMPLATE_ID || "b5454f0332874d8ea09f45afa3142044";
 
 export type SkillEvent = {
   step: string;
@@ -356,25 +358,40 @@ Workspace cwd: C:\\Users\\DivyGoyal\\Desktop\\heygen trial
 
 Run all phases without asking the user any question. Make every editorial decision (tone, hook archetype, structure, image style, motion verb, SFX palette, etc.) autonomously based on the source URL and the skill's reference catalogs.
 
-== HEYGEN AVATAR — RENDER VIA API, NOT MANUAL ==
+== HEYGEN AVATAR — RENDER VIA TEMPLATE ENDPOINT ==
 
-The reel-production skill normally expects the user to deliver \`input/heygen-greenscreen.mp4\` manually. For this autonomous run, you must instead render it via the HeyGen API:
+The reel-production skill normally expects the user to deliver \`input/heygen-greenscreen.mp4\` manually. For this autonomous run, render it via the HeyGen TEMPLATE endpoint (NOT v2/video/generate):
 
-  - API endpoint: POST https://api.heygen.com/v2/video/generate
-  - Auth header: "X-Api-Key: $env:HEYGEN_API_KEY" (already set in environment)
-  - Avatar look ID: ${HEYGEN_AVATAR_LOOK_ID} (Elio portrait, 1080×1920)
-  - Voice ID: ${HEYGEN_VOICE_ID} (Raunak M, ElevenLabs imported)
-  - Aspect ratio: 9:16
-  - Background: { type: "color", value: "#00FF00" }
-  - Engine: { type: "avatar_iv" }
-  - Resolution: 1080p
+WHY THE TEMPLATE ENDPOINT: The configured avatar (${HEYGEN_AVATAR_LOOK_ID}) is a HeyGen photo_avatar. \`v2/video/generate\` silently ignores the \`background\` override for photo_avatars and returns the avatar with its natural baked-in background — which breaks the chroma-key composition. The template (${HEYGEN_TEMPLATE_ID}) has the avatar + chroma-green BG locked at the template level and exposes the script as a {{script}} text variable, so the override sticks.
+
+Render call:
+  - POST https://api.heygen.com/v2/template/${HEYGEN_TEMPLATE_ID}/generate
+  - Auth header: "X-Api-Key: $env:HEYGEN_API_KEY"
+  - Body (JSON):
+      {
+        "caption": false,
+        "title": "<slug> <ISO timestamp>",
+        "variables": {
+          "script": {
+            "name": "script",
+            "type": "text",
+            "properties": { "content": "<THE FULL SCRIPT TEXT — beats joined with \\n\\n>" }
+          }
+        }
+      }
+  - The variable MUST be type "text" with properties.content. Do NOT use type "voice" — HeyGen voice variables only override voice_id, not the spoken script. (Voice ID is already baked in the template.)
 
 Workflow:
-  1. After Phase 2.1 (script done), call HeyGen API with the script
-  2. Poll GET /v1/video_status.get?video_id=<ID> every 15 seconds until status == "completed"
-  3. Download the resulting mp4 (curl/fetch)
-  4. Save at C:\\Users\\DivyGoyal\\Desktop\\heygen trial\\input\\heygen-greenscreen.mp4 (overwrite existing)
-  5. Resume Phase 4 + 5 normally
+  1. After Phase 2.1 (script done), build the variables payload above and POST it
+  2. Capture \`data.video_id\` from the response
+  3. Poll GET https://api.heygen.com/v1/video_status.get?video_id=<ID> every 15 seconds until status == "completed"
+  4. Download the resulting mp4 (curl/fetch) from \`data.video_url\`
+  5. Save at C:\\Users\\DivyGoyal\\Desktop\\heygen trial\\input\\heygen-greenscreen.mp4 (overwrite existing)
+  6. Verify duration roughly matches script word-count × 0.45s/word — if it returned the template's placeholder script ("lorem ipsum…"), the variable substitution failed; debug before continuing.
+  7. Resume Phase 4 + 5 normally
+
+NOTE: If \`HEYGEN_TEMPLATE_ID\` is unset or empty (env-driven, would default to ${HEYGEN_TEMPLATE_ID}), you can fall back to v2/video/generate with these params — but expect the chroma override to fail for photo_avatars:
+  - avatar_id: ${HEYGEN_AVATAR_LOOK_ID}, voice_id: ${HEYGEN_VOICE_ID}, aspect 9:16, BG #00FF00, engine avatar_iv, 1080p
 
 == OUTPUT ==
 

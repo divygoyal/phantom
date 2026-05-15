@@ -59,7 +59,7 @@ Open `http://localhost:3002/live-run`, paste an X URL or article URL, click **Ru
 | **Claude Code CLI** on PATH (`claude --print` must work) | Phantom shells out to invoke the skill |
 | **`reel-production` skill** at `~/.claude/skills/reel-production/` | The editorial brain. Ship of Theseus — years of taste compressed into rubrics |
 | **FFmpeg + ffprobe** on PATH | Source-video cuts, chroma-key, mobile encode. Windows: `winget install Gyan.FFmpeg` |
-| **HeyGen API key** | Avatar renders. Configure `HEYGEN_AVATAR_LOOK_ID` + `HEYGEN_VOICE_ID` (voice can be a cloned ElevenLabs voice imported into HeyGen) |
+| **HeyGen API key** | Avatar renders. Configure `HEYGEN_AVATAR_LOOK_ID` + `HEYGEN_VOICE_ID` (voice can be a cloned ElevenLabs voice imported into HeyGen). If your avatar is a **photo_avatar**, also set `HEYGEN_TEMPLATE_ID` (a chroma-locked template with a `{{script}}` text variable) — the direct render endpoint silently ignores background overrides for photo_avatars |
 | **Gemini API key** (free) | Nano Banana stills for B-roll beats not covered by source video |
 | **PostHog personal key** (free) | Event capture + HogQL read-back loop |
 | **Groq API key** (free) | Whisper word-level transcription for caption sync |
