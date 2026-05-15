@@ -1,6 +1,7 @@
 import "server-only";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { fal } from "@fal-ai/client";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 function falConfigured(): boolean {
   return !!process.env.FAL_KEY?.trim();
@@ -36,44 +37,108 @@ export async function generateImage(
   const height = opts.height ?? 720;
 
   if (status === "fal") {
-    const result = await fal.subscribe("fal-ai/flux/schnell", {
-      input: {
-        prompt,
-        image_size: width === height ? "square_hd" : "landscape_16_9",
-        num_inference_steps: 4,
-        num_images: 1,
-        enable_safety_checker: true,
-      },
-    });
-    const data = result.data as { images?: Array<{ url: string }> };
-    const first = data.images?.[0];
-    if (!first) throw new Error("Fal returned no images");
-    return { url: first.url, width, height, provider: "fal" };
+    try {
+      const result = await fal.subscribe("fal-ai/flux/schnell", {
+        input: {
+          prompt,
+          image_size: width === height ? "square_hd" : "landscape_16_9",
+          num_inference_steps: 4,
+          num_images: 1,
+          enable_safety_checker: true,
+        },
+      });
+      const data = result.data as { images?: Array<{ url: string }> };
+      const first = data.images?.[0];
+      if (first) return { url: first.url, width, height, provider: "fal" };
+    } catch (err) {
+      console.error("Fal image gen failed, falling through:", err);
+    }
   }
 
-  if (status === "gemini") {
-    const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    // Gemini's image gen endpoint via the Imagen model
-    // Falls back to a placeholder if the SDK version doesn't expose image gen directly
-    try {
-      // Newer SDK: use the Imagen model
-      // @ts-expect-error Newer SDK adds .getImageModel; old SDKs throw — we catch
-      const model = client.getImageModel?.("imagen-3.0-generate-001");
-      if (model) {
-        const result = await model.generateImages({ prompt, numberOfImages: 1 });
-        const img = result.generatedImages?.[0];
-        if (img?.image?.imageBytes) {
-          const dataUrl = `data:image/png;base64,${img.image.imageBytes}`;
-          return { url: dataUrl, width, height, provider: "gemini" };
-        }
-      }
-    } catch {
-      // fall through to placeholder
-    }
-    return scriptedImage(prompt, width, height);
+  if (geminiConfigured()) {
+    const result = await generateImageViaGemini(prompt, width, height);
+    if (result) return result;
   }
 
   return scriptedImage(prompt, width, height);
+}
+
+// Gemini Nano Banana (gemini-2.5-flash-image-preview) via REST.
+// AI Studio API key works. Returns base64 PNG inline data, which we save to disk
+// and return as a relative path (HyperFrames file server serves it).
+async function generateImageViaGemini(
+  prompt: string,
+  width: number,
+  height: number
+): Promise<GeneratedImage | null> {
+  const apiKey = process.env.GEMINI_API_KEY!.trim();
+  // Try the current Nano Banana model first; fall back to alternatives if it 404s.
+  const candidates = [
+    "gemini-2.5-flash-image-preview",
+    "gemini-2.5-flash-image",
+    "gemini-2.0-flash-exp",
+  ];
+
+  for (const model of candidates) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+    };
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        // 404 = model not available on this key; try next candidate.
+        if (res.status === 404) continue;
+        const errText = await res.text();
+        console.error(`Gemini ${model} returned ${res.status}: ${errText.slice(0, 200)}`);
+        return null;
+      }
+      const data = await res.json();
+      const parts =
+        data.candidates?.[0]?.content?.parts ??
+        data.candidates?.[0]?.message?.content ??
+        [];
+      for (const part of parts) {
+        const inline = part?.inlineData ?? part?.inline_data;
+        if (inline?.data && inline?.mimeType?.startsWith("image/")) {
+          const fileName = `gemini-${hashPrompt(prompt)}.png`;
+          const savedUrl = await saveImageToCompositionAssets(inline.data, fileName);
+          return { url: savedUrl, width, height, provider: "gemini" };
+        }
+      }
+    } catch (err) {
+      console.error(`Gemini ${model} fetch failed:`, err);
+      // Try next candidate
+    }
+  }
+  return null;
+}
+
+async function saveImageToCompositionAssets(
+  base64Data: string,
+  fileName: string
+): Promise<string> {
+  const compRoot = path.resolve(
+    process.cwd(),
+    process.cwd().endsWith("phantom") ? "composition" : "phantom/composition"
+  );
+  const assetsDir = path.join(compRoot, "assets");
+  await fs.mkdir(assetsDir, { recursive: true });
+  const filePath = path.join(assetsDir, fileName);
+  const buf = Buffer.from(base64Data, "base64");
+  await fs.writeFile(filePath, buf);
+  return `assets/${fileName}`;
+}
+
+function hashPrompt(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
 }
 
 export async function generateThumbnailVariants(
@@ -97,14 +162,17 @@ function scriptedImage(
   width: number,
   height: number
 ): GeneratedImage {
-  // Return a deterministic placeholder seeded by the prompt hash
-  let h = 0;
-  for (let i = 0; i < prompt.length; i++) h = (h * 31 + prompt.charCodeAt(i)) | 0;
-  const seed = Math.abs(h);
+  const seed = Math.abs(hashSeed(prompt));
   return {
     url: `https://picsum.photos/seed/${seed}/${width}/${height}`,
     width,
     height,
     provider: "scripted",
   };
+}
+
+function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
 }
