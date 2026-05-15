@@ -2,6 +2,7 @@ import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { buildCaptionFilter, findTranscript } from "./caption-filter";
 
 /**
  * Skill runner — shells out to `claude --print` and lets the user's
@@ -208,6 +209,32 @@ export async function* runReelViaSkill(
     return;
   }
 
+  // Apply the word-level Playfair caption styling pass (1.3x speed +
+  // Whisper-pinned per-word captions). If it fails for any reason, fall
+  // back silently to the unstyled base reel.
+  yield {
+    step: "style-apply",
+    message: "Applying word-level Playfair captions (1.3x speed)",
+    status: "running",
+    output: `base: ${foundMp4}`,
+  };
+  const styling = await applyStyling(skillSlug, foundMp4);
+  if (styling.ok && styling.path) {
+    foundMp4 = styling.path;
+    yield {
+      step: "style-apply",
+      message: "Styling applied",
+      status: "done",
+      output: `styled: ${styling.path}\nfont: PlayfairDisplay-Regular · word-pinned via Whisper · speed=1.3x`,
+    };
+  } else {
+    yield {
+      step: "style-apply",
+      message: `Styling skipped (${styling.error || "unknown"}) — using base reel`,
+      status: "failed",
+    };
+  }
+
   // Copy to phantom/public/reels/<slug>/final.mp4
   const phantomReelDir = path.join(PHANTOM_ROOT, "public", "reels", slug);
   await fs.mkdir(phantomReelDir, { recursive: true });
@@ -220,6 +247,98 @@ export async function* runReelViaSkill(
     status: "done",
     output: `from: ${foundMp4}\nto:   ${phantomMp4}\nsize: ${((await fs.stat(phantomMp4)).size / 1_000_000).toFixed(1)} MB`,
   };
+}
+
+/**
+ * Word-level Playfair caption styling pass — runs after the skill returns
+ * the base reel mp4.
+ *
+ * Two stages:
+ *   1. Build the ffmpeg drawtext filter from output/breaking/<slug>/
+ *      transcript-*.json (in-process, see caption-filter.ts)
+ *   2. ffmpeg -filter_complex_script <FILE> → setpts/atempo 1.3x + burns
+ *      per-word captions into a styled mp4
+ *
+ * Falls back to the unstyled base reel if either stage fails.
+ */
+async function applyStyling(
+  skillSlug: string,
+  baseMp4: string
+): Promise<{ ok: boolean; path?: string; error?: string }> {
+  // Paths used as ffmpeg args MUST be relative to WORKSPACE_ROOT — the
+  // absolute path contains a space ("heygen trial") that breaks unquoted
+  // shell arg splitting.
+  const filterRel = `output/style-filter-${skillSlug}.txt`;
+  const styledRel = `output/final-styled-${skillSlug}.mp4`;
+  const baseRel = path
+    .relative(WORKSPACE_ROOT, baseMp4)
+    .replace(/\\/g, "/");
+  const filterAbs = path.join(WORKSPACE_ROOT, filterRel);
+  const styledAbs = path.join(WORKSPACE_ROOT, styledRel);
+
+  const transcript = await findTranscript(WORKSPACE_ROOT, skillSlug);
+  if (!transcript) {
+    return { ok: false, error: "no transcript-*.json in slug dir" };
+  }
+
+  try {
+    await buildCaptionFilter(transcript, filterAbs);
+  } catch (e) {
+    return { ok: false, error: `filter build failed: ${(e as Error).message}` };
+  }
+
+  const ffmpegOk = await new Promise<boolean>((resolve) => {
+    const p = spawn(
+      "ffmpeg",
+      [
+        "-y",
+        "-i",
+        baseRel,
+        "-filter_complex_script",
+        filterRel,
+        "-map",
+        "[v]",
+        "-map",
+        "[a]",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "19",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        styledRel,
+      ],
+      {
+        shell: true,
+        cwd: WORKSPACE_ROOT,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: process.env,
+      }
+    );
+    p.on("close", (code) => resolve(code === 0));
+    p.on("error", () => resolve(false));
+  });
+  if (!ffmpegOk) return { ok: false, error: "ffmpeg styling render failed" };
+
+  try {
+    const stat = await fs.stat(styledAbs);
+    if (stat.size < 100_000) {
+      return { ok: false, error: `styled mp4 too small (${stat.size}b)` };
+    }
+  } catch {
+    return { ok: false, error: "styled mp4 not found after ffmpeg" };
+  }
+
+  return { ok: true, path: styledAbs };
 }
 
 function buildPrompt(url: string, slug: string): string {
