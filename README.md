@@ -130,7 +130,7 @@ The whole pipeline is **autonomous** between stages 1 and 8 — no human input b
 |---|---|---|
 | **Node 22+, npm 11+** | Next.js 16 + Prisma 6 toolchain | [nodejs.org](https://nodejs.org) |
 | **Claude Code CLI** on `PATH` (so `claude --print` works) | Phantom shells out to invoke the skill subprocess | [claude.com/claude-code](https://www.claude.com/product/claude-code) |
-| **`reel-production` skill** at `~/.claude/skills/reel-production/` | The editorial brain — years of taste compressed into rubrics + critique loops | provided separately by the author |
+| **`reel-production` skill** at `~/.claude/skills/reel-production/` | The editorial brain — viral-pattern rubrics + 20-signal critique pass | **ships in this repo** at `skills/reel-production/` · just copy/symlink it into your `~/.claude/skills/` folder (see Quick Start step 4) |
 | **FFmpeg + ffprobe** on `PATH` | Source-clip cuts, chroma-key, caption burn, mobile encode | Windows: `winget install Gyan.FFmpeg` · macOS: `brew install ffmpeg` · Linux: `apt install ffmpeg` |
 | **HeyGen API key** | Avatar renders | [app.heygen.com/settings](https://app.heygen.com/settings) → API tab |
 | **HeyGen template** (chroma-locked, `{{script}}` text variable) | Required if your avatar is a **photo_avatar** — the direct `v2/video/generate` endpoint silently ignores `background` overrides for photo_avatars, breaking the chroma-key composition step | Create in HeyGen UI: avatar + lock chroma-green BG + add `{{script}}` text var in the script panel · then `GET https://api.heygen.com/v2/templates` to grab the id |
@@ -161,7 +161,14 @@ cp .env.example .env.local
 #   GROQ_API_KEY=gsk_...
 #   RUN_VIA_SKILL=true               # delegates the pipeline to the reel-production skill
 
-# 4. Start dev server
+# 4. Install the reel-production skill so `claude --print` can discover it
+#    macOS / Linux:
+mkdir -p ~/.claude/skills && cp -r skills/reel-production ~/.claude/skills/
+#    Windows (PowerShell):
+#    New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\skills" | Out-Null
+#    Copy-Item -Recurse -Force skills/reel-production "$env:USERPROFILE\.claude\skills\"
+
+# 5. Start dev server
 npm run dev   # → http://localhost:3000
 ```
 
